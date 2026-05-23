@@ -1,0 +1,1025 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Destination Comparator &middot; Interstellar Harvest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <style>
+    /* ============================================================
+       Tokens
+       ============================================================ */
+    :root {
+      --space-deep: #0B0F1F;
+      --space-mid: #15182E;
+      --sun-glow: #FFC857;
+      --sun-orange: #E87B3B;
+      --leaf-green: #7BA86F;
+      --leaf-bright: #9FCC8F;
+      --warn-red: #E85B5B;
+      --warn-pink: #fda4af;
+      --accent-purple: #8B6FE6;
+      --accent-purple-deep: #5B41B5;
+      --star-white: #F5F0E8;
+      --star-dim: #cbd5e1;
+      --star-muted: #94a3b8;
+
+      --font-pixel: 'Press Start 2P', ui-monospace, monospace;
+      --font-term: 'VT323', ui-monospace, monospace;
+
+      --radius: 4px;
+      --radius-lg: 6px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100%; }
+
+    body {
+      font-family: var(--font-term);
+      font-size: 20px;
+      line-height: 1.4;
+      color: var(--star-white);
+      background:
+        radial-gradient(ellipse at 15% 10%, rgba(91,65,181,0.18), transparent 55%),
+        radial-gradient(ellipse at 85% 80%, rgba(232,123,59,0.10), transparent 50%),
+        linear-gradient(135deg, #0B0F1F 0%, #15182E 50%, #0B0F1F 100%);
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+      padding: 18px 14px 32px;
+    }
+
+    button { font-family: inherit; cursor: pointer; }
+    button:focus-visible { outline: 2px solid var(--sun-glow); outline-offset: 2px; border-radius: var(--radius); }
+    textarea:focus-visible { outline: 2px solid var(--sun-glow); outline-offset: 2px; }
+    summary:focus-visible { outline: 2px solid var(--sun-glow); outline-offset: 2px; border-radius: var(--radius); }
+
+    .wrap { max-width: 1040px; margin: 0 auto; }
+
+    /* ============================================================
+       Persistent header
+       ============================================================ */
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid rgba(139, 111, 230, 0.25);
+    }
+    .header-text { min-width: 0; flex: 1; }
+    .header-logo { height: 52px; width: auto; flex-shrink: 0; image-rendering: -webkit-optimize-contrast; }
+
+    .phase-banner {
+      font-family: var(--font-pixel);
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      color: var(--sun-glow);
+      background: rgba(255, 200, 87, 0.08);
+      border: 1px solid rgba(255, 200, 87, 0.35);
+      border-radius: var(--radius);
+      padding: 6px 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .phase-banner::before {
+      content: '';
+      width: 6px; height: 6px;
+      background: var(--sun-glow);
+      box-shadow: 0 0 8px var(--sun-glow);
+    }
+
+    .title {
+      font-family: var(--font-pixel);
+      font-size: 20px;
+      line-height: 1.25;
+      letter-spacing: 0.02em;
+      margin-bottom: 8px;
+      background-image: linear-gradient(95deg, var(--sun-glow) 0%, var(--sun-orange) 50%, var(--accent-purple) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 22px rgba(255, 200, 87, 0.18);
+    }
+    .subtitle {
+      font-family: var(--font-term);
+      font-size: 18px;
+      color: var(--star-muted);
+      line-height: 1.3;
+    }
+
+    /* ============================================================
+       Progress nav
+       ============================================================ */
+    .progress {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .progress-step {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 6px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(139, 111, 230, 0.22);
+      border-radius: var(--radius);
+      font-family: var(--font-pixel);
+      transition: background-color 0.2s, border-color 0.2s;
+    }
+    .progress-step .pn {
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: var(--radius);
+      background: rgba(100, 116, 139, 0.15);
+      border: 1px solid rgba(100, 116, 139, 0.4);
+      color: var(--star-muted);
+      font-size: 10px;
+    }
+    .progress-step .plabel {
+      font-size: 8px;
+      letter-spacing: 0.1em;
+      color: var(--star-muted);
+    }
+    .progress-step.done .pn {
+      background: rgba(123, 168, 111, 0.18);
+      border-color: rgba(123, 168, 111, 0.5);
+      color: var(--leaf-bright);
+    }
+    .progress-step.done .plabel { color: var(--leaf-bright); }
+    .progress-step.current {
+      background: rgba(255, 200, 87, 0.08);
+      border-color: rgba(255, 200, 87, 0.55);
+    }
+    .progress-step.current .pn {
+      background: rgba(255, 200, 87, 0.18);
+      border-color: var(--sun-glow);
+      color: var(--sun-glow);
+    }
+    .progress-step.current .plabel { color: var(--sun-glow); }
+
+    /* ============================================================
+       Cards
+       ============================================================ */
+    .card {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(139, 111, 230, 0.22);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      margin-bottom: 14px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .label-mono {
+      font-family: var(--font-pixel);
+      font-size: 8px;
+      letter-spacing: 0.16em;
+      color: var(--sun-glow);
+    }
+
+    .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+    .step-num {
+      width: 34px; height: 34px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: var(--radius);
+      background: rgba(255, 200, 87, 0.15);
+      border: 1px solid rgba(255, 200, 87, 0.55);
+      color: var(--sun-glow);
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    .step-title {
+      font-family: var(--font-pixel);
+      font-size: 12px;
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+      color: var(--star-white);
+      margin-top: 4px;
+    }
+    .step-note {
+      font-family: var(--font-term);
+      font-size: 18px;
+      color: var(--star-muted);
+      margin-bottom: 14px;
+      line-height: 1.35;
+    }
+    .step-note .accent { color: var(--sun-glow); }
+
+    /* ============================================================
+       Option buttons
+       ============================================================ */
+    .opt-grid { display: grid; gap: 10px; }
+    .opt-grid.crops { grid-template-columns: repeat(3, 1fr); }
+    .opt-grid.dests { grid-template-columns: repeat(3, 1fr); }
+
+    .opt-btn {
+      background: rgba(11, 15, 31, 0.6);
+      border: 1px solid rgba(139, 111, 230, 0.28);
+      border-radius: var(--radius);
+      padding: 14px;
+      text-align: left;
+      transition: background-color 0.15s, border-color 0.15s, transform 0.12s, box-shadow 0.15s;
+      width: 100%;
+      display: flex; flex-direction: column; gap: 4px;
+      color: var(--star-white);
+    }
+    .opt-btn:hover:not(:disabled):not(.selected) {
+      background: rgba(31, 36, 64, 0.85);
+      border-color: rgba(139, 111, 230, 0.6);
+      transform: translateY(-1px);
+    }
+    .opt-btn.selected {
+      background: rgba(255, 200, 87, 0.12);
+      border-color: var(--sun-glow);
+      box-shadow: 0 0 18px rgba(255, 200, 87, 0.32);
+    }
+    .opt-btn.placeholder {
+      border-style: dashed;
+      background: rgba(11, 15, 31, 0.35);
+    }
+    .opt-btn.placeholder .opt-name { color: var(--star-muted); }
+    .opt-btn.placeholder.selected {
+      background: rgba(139, 111, 230, 0.14);
+      border-color: var(--accent-purple);
+      border-style: solid;
+      box-shadow: 0 0 18px rgba(139, 111, 230, 0.32);
+    }
+
+    .opt-row { display: flex; align-items: center; gap: 10px; }
+    .opt-emoji { font-size: 24px; line-height: 1; flex-shrink: 0; }
+    .opt-name {
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      letter-spacing: 0.02em;
+      color: var(--star-white);
+      line-height: 1.3;
+    }
+    .opt-meta {
+      font-family: var(--font-term);
+      font-size: 17px;
+      color: var(--star-muted);
+      line-height: 1.25;
+    }
+    .placeholder-tag {
+      display: inline-flex;
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      color: var(--accent-purple);
+      background: rgba(139, 111, 230, 0.15);
+      border: 1px solid rgba(139, 111, 230, 0.45);
+      padding: 4px 6px;
+      border-radius: 3px;
+      margin-top: 4px;
+      width: fit-content;
+    }
+
+    /* ============================================================
+       Action footer (continue / plant / reflect buttons)
+       ============================================================ */
+    .action-footer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+      align-items: center;
+      margin-top: 16px;
+    }
+    .action-footer.full { justify-content: stretch; }
+    .action-footer.full > button { flex: 1; }
+
+    .continue-btn {
+      background: rgba(11, 15, 31, 0.7);
+      border: 1px solid var(--sun-glow);
+      color: var(--sun-glow);
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 14px 22px;
+      border-radius: var(--radius);
+      transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+    }
+    .continue-btn:hover:not(:disabled) {
+      background: rgba(255, 200, 87, 0.15);
+      box-shadow: 0 0 18px rgba(255, 200, 87, 0.3);
+    }
+    .continue-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    .plant-btn {
+      background: linear-gradient(95deg, var(--sun-glow) 0%, var(--sun-orange) 60%, var(--accent-purple) 100%);
+      color: var(--space-deep);
+      font-family: var(--font-pixel);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      padding: 16px 24px;
+      border-radius: var(--radius);
+      border: none;
+      transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
+      box-shadow: 0 4px 22px rgba(255, 200, 87, 0.28);
+    }
+    .plant-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(255, 200, 87, 0.5);
+    }
+    .plant-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    /* ============================================================
+       Results
+       ============================================================ */
+    .results-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .results-variable {
+      font-family: var(--font-pixel);
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: var(--star-muted);
+    }
+    .results-variable .var-value { color: var(--accent-purple); }
+
+    .prediction-recall {
+      font-family: var(--font-term);
+      font-size: 18px;
+      color: var(--star-dim);
+      margin-bottom: 14px;
+      padding: 10px 14px;
+      background: rgba(255, 200, 87, 0.08);
+      border-left: 3px solid var(--sun-glow);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+    .prediction-recall .pr-label {
+      font-family: var(--font-pixel);
+      font-size: 8px;
+      letter-spacing: 0.14em;
+      color: var(--sun-glow);
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .dest-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .dest-card {
+      background: rgba(11, 15, 31, 0.72);
+      border: 1px solid rgba(139, 111, 230, 0.25);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+    }
+    .dest-card.outcome-baseline { border-color: rgba(245, 240, 232, 0.3); }
+    .dest-card.outcome-thriving { border-color: rgba(123, 168, 111, 0.5); }
+    .dest-card.outcome-struggling { border-color: rgba(232, 123, 59, 0.5); }
+    .dest-card.outcome-failed { border-color: rgba(232, 91, 91, 0.5); }
+    .dest-card.prediction-was {
+      border-color: var(--sun-glow);
+      box-shadow: 0 0 22px rgba(255, 200, 87, 0.3);
+    }
+
+    .dest-img {
+      aspect-ratio: 4 / 3;
+      position: relative;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      color: rgba(255, 255, 255, 0.92);
+      text-align: center;
+      overflow: hidden;
+    }
+    .dest-img::after {
+      content: '';
+      position: absolute; inset: 0;
+      background-image:
+        radial-gradient(circle at 28% 22%, rgba(255,255,255,0.15), transparent 55%),
+        radial-gradient(circle at 75% 80%, rgba(0,0,0,0.30), transparent 55%);
+      pointer-events: none;
+    }
+    .dest-img.earth { background: linear-gradient(135deg, #1e3a8a 0%, #047857 55%, #064e3b 100%); }
+    .dest-img.moon  { background: linear-gradient(135deg, #1e293b 0%, #64748b 50%, #cbd5e1 100%); color: #1e293b; }
+    .dest-img.mars  { background: linear-gradient(135deg, #7c2d12 0%, #c2410c 50%, #9a3412 100%); }
+    .dest-img.iss   { background: linear-gradient(135deg, #020617 0%, #312e81 50%, #1e1b4b 100%); }
+
+    .dest-icon {
+      font-size: 36px;
+      line-height: 1;
+      position: relative;
+      z-index: 1;
+      filter: drop-shadow(0 2px 6px rgba(0,0,0,0.45));
+    }
+    .dest-img-tag {
+      position: relative;
+      z-index: 1;
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.1em;
+      padding: 4px 8px;
+      background: rgba(0,0,0,0.5);
+      color: rgba(255, 255, 255, 0.95);
+      border-radius: 3px;
+    }
+    .dest-img.moon .dest-img-tag { background: rgba(255,255,255,0.55); color: var(--space-deep); }
+
+    .dest-body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .dest-head {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; flex-wrap: wrap;
+    }
+    .dest-name {
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      color: var(--star-white);
+    }
+    .dest-badge {
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.1em;
+      padding: 4px 7px;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+    .badge-baseline   { background: rgba(245, 240, 232, 0.12); color: var(--star-dim); border: 1px solid rgba(245, 240, 232, 0.35); }
+    .badge-thriving   { background: rgba(123, 168, 111, 0.2); color: var(--leaf-bright); border: 1px solid rgba(123, 168, 111, 0.5); }
+    .badge-struggling { background: rgba(232, 123, 59, 0.2); color: #fbbf24; border: 1px solid rgba(232, 123, 59, 0.55); }
+    .badge-failed     { background: rgba(232, 91, 91, 0.2); color: var(--warn-pink); border: 1px solid rgba(232, 91, 91, 0.55); }
+
+    .dest-variable {
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      color: var(--accent-purple);
+    }
+    .dest-caption {
+      font-family: var(--font-term);
+      font-size: 18px;
+      line-height: 1.35;
+      color: var(--star-dim);
+    }
+    .prediction-flag {
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.14em;
+      color: var(--sun-glow);
+      background: rgba(255, 200, 87, 0.12);
+      border: 1px solid rgba(255, 200, 87, 0.5);
+      border-radius: 3px;
+      padding: 4px 7px;
+      align-self: flex-start;
+      margin-top: 4px;
+    }
+
+    /* ============================================================
+       Reflection
+       ============================================================ */
+    .reflect-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .reflect-label {
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      line-height: 1.4;
+      color: var(--star-white);
+    }
+    .reflect-hint {
+      font-family: var(--font-term);
+      font-size: 17px;
+      color: var(--star-muted);
+      line-height: 1.3;
+    }
+    .reflect-input {
+      background: rgba(11, 15, 31, 0.78);
+      border: 1px solid rgba(139, 111, 230, 0.35);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      color: var(--star-white);
+      font-family: var(--font-term);
+      font-size: 19px;
+      line-height: 1.35;
+      resize: vertical;
+      min-height: 70px;
+      width: 100%;
+    }
+
+    .secondary-btn {
+      background: rgba(11, 15, 31, 0.6);
+      border: 1px solid rgba(139, 111, 230, 0.5);
+      color: #c4b5fd;
+      font-family: var(--font-pixel);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .secondary-btn:hover {
+      background: rgba(139, 111, 230, 0.18);
+      border-color: var(--accent-purple);
+      color: var(--star-white);
+    }
+    .copy-confirm {
+      font-family: var(--font-pixel);
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      color: var(--leaf-bright);
+    }
+
+    /* ============================================================
+       Guidance
+       ============================================================ */
+    details.guidance summary {
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: var(--font-pixel);
+      font-size: 11px;
+      color: var(--star-white);
+    }
+    details.guidance summary::-webkit-details-marker { display: none; }
+    details.guidance summary::before {
+      content: '?';
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px;
+      border-radius: var(--radius);
+      background: rgba(255, 200, 87, 0.15);
+      border: 1px solid rgba(255, 200, 87, 0.55);
+      color: var(--sun-glow);
+      font-family: var(--font-pixel);
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    details.guidance[open] summary::before { content: '\2715'; font-size: 10px; }
+    .guide-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px 24px;
+      margin-top: 14px;
+    }
+    .guide-text {
+      font-family: var(--font-term);
+      font-size: 18px;
+      line-height: 1.35;
+      color: var(--star-dim);
+      margin-top: 4px;
+    }
+
+    /* ============================================================
+       Screen swap + animation
+       ============================================================ */
+    .screen { display: none; }
+    .screen.active { display: block; animation: fadeIn 0.3s ease-out; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .reveal { animation: fadeUp 0.4s ease-out both; }
+    .reveal:nth-child(1) { animation-delay: 0.05s; }
+    .reveal:nth-child(2) { animation-delay: 0.15s; }
+    .reveal:nth-child(3) { animation-delay: 0.25s; }
+    .reveal:nth-child(4) { animation-delay: 0.35s; }
+
+    .hidden { display: none; }
+
+    /* ============================================================
+       Responsive
+       ============================================================ */
+    @media (max-width: 720px) {
+      body { font-size: 19px; padding: 12px 10px 28px; }
+      .title { font-size: 17px; }
+      .subtitle { font-size: 17px; }
+      .header-logo { height: 42px; }
+      .step-title { font-size: 11px; }
+      .opt-grid.crops { grid-template-columns: 1fr; }
+      .opt-grid.dests { grid-template-columns: 1fr; }
+      .dest-grid { grid-template-columns: 1fr 1fr; }
+      .opt-name { font-size: 10px; }
+      .guide-grid { grid-template-columns: 1fr; }
+      .progress-step .plabel { font-size: 7px; }
+      .action-footer { justify-content: stretch; }
+      .action-footer > button { flex: 1; }
+    }
+    @media (max-width: 440px) {
+      .dest-grid { grid-template-columns: 1fr; }
+      .title { font-size: 15px; }
+      .header { gap: 10px; }
+      .header-logo { height: 36px; }
+      .progress-step { padding: 8px 4px; }
+      .progress-step .pn { width: 22px; height: 22px; font-size: 9px; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+
+    <!-- Persistent header -->
+    <header class="header">
+      <div class="header-text">
+        <div class="phase-banner">PHASE 2 PROTOTYPE</div>
+        <h1 class="title">DESTINATION COMPARATOR</h1>
+        <p class="subtitle">Pick a crop. Predict where it will struggle. See what survives.</p>
+      </div>
+      <img
+        src="https://static.wixstatic.com/media/1dba8d_bafa701b1dff45a29f3fc27738dad377~mv2.png"
+        alt="Interstellar Harvest course logo: a young plant in soil under a sun rising over a starry sky"
+        class="header-logo"
+        onerror="this.style.display='none';">
+    </header>
+
+    <!-- Progress nav -->
+    <nav class="progress" aria-label="Simulation progress">
+      <div class="progress-step current" data-stepkey="pick">
+        <span class="pn">1</span>
+        <span class="plabel">PICK</span>
+      </div>
+      <div class="progress-step" data-stepkey="predict">
+        <span class="pn">2</span>
+        <span class="plabel">PREDICT</span>
+      </div>
+      <div class="progress-step" data-stepkey="compare">
+        <span class="pn">3</span>
+        <span class="plabel">COMPARE</span>
+      </div>
+      <div class="progress-step" data-stepkey="reflect">
+        <span class="pn">✦</span>
+        <span class="plabel">REFLECT</span>
+      </div>
+    </nav>
+
+    <!-- Guidance (defaults open) -->
+    <details class="card guidance" open>
+      <summary>HOW TO USE THIS SIMULATION</summary>
+      <div class="guide-grid">
+        <div>
+          <span class="label-mono">TRY</span>
+          <p class="guide-text">Pick a crop, make your prediction, then plant in all four destinations.</p>
+        </div>
+        <div>
+          <span class="label-mono">NOTICE</span>
+          <p class="guide-text">Earth is the baseline. Compare the others against it. Look for the variable that changes most.</p>
+        </div>
+        <div>
+          <span class="label-mono">SUCCESS</span>
+          <p class="guide-text">You can explain why the same crop succeeds in some places and fails in others.</p>
+        </div>
+        <div>
+          <span class="label-mono">STUCK?</span>
+          <p class="guide-text">Read each caption out loud. Re-run with a different crop. Failure is the lesson here.</p>
+        </div>
+      </div>
+    </details>
+
+    <!-- ============================================================
+         SCREEN 1: PICK A CROP
+         ============================================================ -->
+    <section class="screen active" data-screen="pick">
+      <div class="card">
+        <div class="step-header">
+          <span class="step-num">1</span>
+          <div>
+            <div class="label-mono">STEP 1</div>
+            <div class="step-title">PICK A CROP</div>
+          </div>
+        </div>
+        <div class="opt-grid crops">
+          <button class="opt-btn" data-crop="lettuce" aria-pressed="false">
+            <div class="opt-row">
+              <span class="opt-emoji" aria-hidden="true">🥬</span>
+              <span class="opt-name">LETTUCE</span>
+            </div>
+            <span class="opt-meta">Leafy, fast-growing, photosynthesis-driven</span>
+          </button>
+          <button class="opt-btn placeholder" data-crop="tomato" aria-pressed="false">
+            <div class="opt-row">
+              <span class="opt-emoji" aria-hidden="true">🍅</span>
+              <span class="opt-name">TOMATO</span>
+            </div>
+            <span class="opt-meta">Fruiting, gravity-sensitive</span>
+            <span class="placeholder-tag">CONTENT PLACEHOLDER</span>
+          </button>
+          <button class="opt-btn placeholder" data-crop="potato" aria-pressed="false">
+            <div class="opt-row">
+              <span class="opt-emoji" aria-hidden="true">🥔</span>
+              <span class="opt-name">POTATO</span>
+            </div>
+            <span class="opt-meta">Tuber, soil-dependent</span>
+            <span class="placeholder-tag">CONTENT PLACEHOLDER</span>
+          </button>
+        </div>
+        <div class="action-footer">
+          <button id="to-predict" class="continue-btn" disabled>CONTINUE &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 2: PREDICT
+         ============================================================ -->
+    <section class="screen" data-screen="predict">
+      <div class="card">
+        <div class="step-header">
+          <span class="step-num">2</span>
+          <div>
+            <div class="label-mono">STEP 2</div>
+            <div class="step-title">WHERE WILL YOUR CROP STRUGGLE MOST?</div>
+          </div>
+        </div>
+        <p class="step-note">
+          <span class="accent">Earth is our control.</span> We'll plant your crop there as a baseline. Pick one of the three off-Earth destinations to predict where the crop will struggle hardest. There's no penalty for being wrong.
+        </p>
+        <div class="opt-grid dests">
+          <button class="opt-btn" data-dest="moon" aria-pressed="false">
+            <div class="opt-row"><span class="opt-emoji" aria-hidden="true">🌑</span><span class="opt-name">MOON</span></div>
+            <span class="opt-meta">No atmosphere. 14-day nights.</span>
+          </button>
+          <button class="opt-btn" data-dest="mars" aria-pressed="false">
+            <div class="opt-row"><span class="opt-emoji" aria-hidden="true">🔴</span><span class="opt-name">MARS</span></div>
+            <span class="opt-meta">Thin air. Dust storms. Cold.</span>
+          </button>
+          <button class="opt-btn" data-dest="iss" aria-pressed="false">
+            <div class="opt-row"><span class="opt-emoji" aria-hidden="true">🛰️</span><span class="opt-name">ISS</span></div>
+            <span class="opt-meta">Microgravity. No natural sun.</span>
+          </button>
+        </div>
+        <div class="action-footer">
+          <button id="plant-action" class="plant-btn" disabled>PLANT &amp; COMPARE &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 3: COMPARE (results)
+         ============================================================ -->
+    <section class="screen" data-screen="compare">
+      <div class="card">
+        <div class="results-head">
+          <div>
+            <div class="label-mono">STEP 3 &middot; RESULTS</div>
+            <div class="step-title"><span id="result-crop">LETTUCE</span>, END OF GROWTH CYCLE</div>
+          </div>
+          <div class="results-variable">
+            VARIABLE FOCUS: <span class="var-value" id="result-variable">LIGHT</span>
+          </div>
+        </div>
+        <div class="prediction-recall" id="prediction-recall">
+          <span class="pr-label">YOUR PREDICTION</span>
+          <span id="prediction-recall-text">You predicted that your crop would struggle most on the Moon.</span>
+        </div>
+        <div id="dest-grid" class="dest-grid"></div>
+        <div class="action-footer">
+          <button id="to-reflect" class="continue-btn">REFLECT &rarr;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================
+         SCREEN 4: REFLECT
+         ============================================================ -->
+    <section class="screen" data-screen="reflect">
+      <div class="card">
+        <div class="step-header">
+          <span class="step-num">✦</span>
+          <div>
+            <div class="label-mono">BEFORE YOU MOVE ON</div>
+            <div class="step-title">THREE QUICK QUESTIONS</div>
+          </div>
+        </div>
+        <p class="step-note">You'll use these answers in the Module 1 discussion. Write a sentence or two for each.</p>
+
+        <div class="reflect-field">
+          <label class="reflect-label" for="reflect-helped">ONE CONDITION THAT HELPED YOUR CROP</label>
+          <span class="reflect-hint">What part of the destination's environment let it grow?</span>
+          <textarea class="reflect-input" id="reflect-helped" rows="2" placeholder="For example, LED grow lights on the ISS replaced natural sunlight..."></textarea>
+        </div>
+
+        <div class="reflect-field">
+          <label class="reflect-label" for="reflect-limited">ONE CONDITION THAT LIMITED OR KILLED IT</label>
+          <span class="reflect-hint">What stopped the plant from succeeding?</span>
+          <textarea class="reflect-input" id="reflect-limited" rows="2" placeholder="For example, the Moon's 14-day night halted photosynthesis..."></textarea>
+        </div>
+
+        <div class="reflect-field">
+          <label class="reflect-label" for="reflect-question">ONE QUESTION FOR MODULE 2</label>
+          <span class="reflect-hint">What do you want to understand about keeping a crop alive off-world?</span>
+          <textarea class="reflect-input" id="reflect-question" rows="2" placeholder="For example, how do astronauts power grow lights without overloading life support?"></textarea>
+        </div>
+
+        <div class="action-footer">
+          <button id="copy-btn" class="secondary-btn">COPY MY REFLECTION</button>
+          <button id="reset-btn" class="continue-btn">TRY A DIFFERENT CROP &rarr;</button>
+          <span id="copy-confirm" class="copy-confirm hidden">COPIED</span>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <script>
+    /* ========== Content ========== */
+    const CROP_DATA = {
+      lettuce: {
+        name: 'LETTUCE', emoji: '🥬', variable: 'LIGHT', wired: true,
+        outcomes: {
+          earth: { status: 'baseline', badge: 'BASELINE', caption: "Natural sunlight delivers a full spectrum with a predictable day-night cycle. The lettuce reaches full size with dark green, crisp leaves. This is what success looks like." },
+          moon:  { status: 'failed',   badge: 'FAILED',   caption: "Each lunar night lasts about 14 Earth days. Without artificial grow lights, photosynthesis halts for half the cycle and the lettuce wilts and dies in the dark." },
+          mars:  { status: 'struggling', badge: 'STRUGGLING', caption: "Sunlight at Mars is roughly 43% of Earth's intensity, and dust storms can block it for weeks. Leaves grow pale and stunted from chronic low light." },
+          iss:   { status: 'thriving', badge: 'THRIVING', caption: "No natural sunlight, but tuned red and blue LED grow lights replace it. NASA's Veggie experiments grow real lettuce here. Slightly smaller heads than Earth, healthy color." }
+        }
+      },
+      tomato: {
+        name: 'TOMATO', emoji: '🍅', variable: 'PLACEHOLDER', wired: false,
+        outcomes: {
+          earth: { status: 'baseline',  badge: 'BASELINE', caption: '[Outcome caption for tomato on Earth pending. Replace when Phase 3 content is ready.]' },
+          moon:  { status: 'failed',    badge: 'PLACEHOLDER', caption: '[Outcome caption for tomato on Moon pending.]' },
+          mars:  { status: 'struggling',badge: 'PLACEHOLDER', caption: '[Outcome caption for tomato on Mars pending.]' },
+          iss:   { status: 'struggling',badge: 'PLACEHOLDER', caption: '[Outcome caption for tomato on ISS pending.]' }
+        }
+      },
+      potato: {
+        name: 'POTATO', emoji: '🥔', variable: 'PLACEHOLDER', wired: false,
+        outcomes: {
+          earth: { status: 'baseline',  badge: 'BASELINE', caption: '[Outcome caption for potato on Earth pending.]' },
+          moon:  { status: 'failed',    badge: 'PLACEHOLDER', caption: '[Outcome caption for potato on Moon pending.]' },
+          mars:  { status: 'struggling',badge: 'PLACEHOLDER', caption: '[Outcome caption for potato on Mars pending.]' },
+          iss:   { status: 'struggling',badge: 'PLACEHOLDER', caption: '[Outcome caption for potato on ISS pending.]' }
+        }
+      }
+    };
+
+    const DEST_META = {
+      earth: { name: 'EARTH', icon: '🌍' },
+      moon:  { name: 'MOON',  icon: '🌑' },
+      mars:  { name: 'MARS',  icon: '🔴' },
+      iss:   { name: 'ISS',   icon: '🛰️' }
+    };
+
+    /* ========== State ========== */
+    const state = { crop: null, prediction: null, screen: 'pick' };
+
+    /* ========== Refs ========== */
+    const screens = document.querySelectorAll('.screen');
+    const progSteps = document.querySelectorAll('.progress-step');
+    const cropBtns = document.querySelectorAll('[data-crop]');
+    const destBtns = document.querySelectorAll('[data-dest]');
+    const toPredictBtn = document.getElementById('to-predict');
+    const plantBtn = document.getElementById('plant-action');
+    const toReflectBtn = document.getElementById('to-reflect');
+    const resetBtn = document.getElementById('reset-btn');
+    const copyBtn = document.getElementById('copy-btn');
+    const copyConfirm = document.getElementById('copy-confirm');
+    const destGrid = document.getElementById('dest-grid');
+    const resultCrop = document.getElementById('result-crop');
+    const resultVariable = document.getElementById('result-variable');
+    const predictionRecallText = document.getElementById('prediction-recall-text');
+
+    /* ========== Screen switching ========== */
+    const SCREEN_ORDER = ['pick', 'predict', 'compare', 'reflect'];
+    function showScreen(name) {
+      state.screen = name;
+      screens.forEach(s => s.classList.toggle('active', s.dataset.screen === name));
+      const idx = SCREEN_ORDER.indexOf(name);
+      progSteps.forEach((p, i) => {
+        p.classList.remove('current', 'done');
+        if (i < idx) p.classList.add('done');
+        else if (i === idx) p.classList.add('current');
+      });
+      // Scroll to top of sim within iframe
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    /* ========== Step 1: crop ========== */
+    cropBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.crop = btn.dataset.crop;
+        cropBtns.forEach(b => {
+          const on = (b === btn);
+          b.classList.toggle('selected', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        toPredictBtn.disabled = false;
+      });
+    });
+    toPredictBtn.addEventListener('click', () => showScreen('predict'));
+
+    /* ========== Step 2: prediction ========== */
+    destBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.prediction = btn.dataset.dest;
+        destBtns.forEach(b => {
+          const on = (b === btn);
+          b.classList.toggle('selected', on);
+          b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        plantBtn.disabled = false;
+      });
+    });
+    plantBtn.addEventListener('click', () => {
+      if (!state.crop || !state.prediction) return;
+      renderResults();
+      showScreen('compare');
+    });
+
+    /* ========== Step 3 -> 4 ========== */
+    toReflectBtn.addEventListener('click', () => showScreen('reflect'));
+
+    /* ========== Render results ========== */
+    function renderResults() {
+      const crop = CROP_DATA[state.crop];
+      resultCrop.textContent = crop.name;
+      resultVariable.textContent = crop.variable;
+      const predDest = DEST_META[state.prediction].name;
+      predictionRecallText.textContent = `You predicted that ${crop.name.toLowerCase()} would struggle most on the ${predDest}.`;
+
+      destGrid.innerHTML = '';
+      Object.keys(DEST_META).forEach(destKey => {
+        const dest = DEST_META[destKey];
+        const outcome = crop.outcomes[destKey];
+        const wasPrediction = (destKey === state.prediction);
+
+        const card = document.createElement('div');
+        card.className = `dest-card reveal outcome-${outcome.status}` + (wasPrediction ? ' prediction-was' : '');
+        card.innerHTML = `
+          <div class="dest-img ${destKey}" role="img" aria-label="Placeholder image for ${crop.name} on ${dest.name}">
+            <span class="dest-icon" aria-hidden="true">${dest.icon}</span>
+            <span class="dest-img-tag">${crop.name} &middot; IMG PLACEHOLDER</span>
+          </div>
+          <div class="dest-body">
+            <div class="dest-head">
+              <span class="dest-name">${dest.name}</span>
+              <span class="dest-badge badge-${outcome.status}">${outcome.badge}</span>
+            </div>
+            <span class="dest-variable">${crop.variable === 'PLACEHOLDER' ? 'VARIABLE: TBD' : 'VARIABLE: ' + crop.variable}</span>
+            <p class="dest-caption">${outcome.caption}</p>
+            ${wasPrediction ? '<span class="prediction-flag">YOUR PREDICTION</span>' : ''}
+          </div>
+        `;
+        destGrid.appendChild(card);
+      });
+    }
+
+    /* ========== Reset ========== */
+    resetBtn.addEventListener('click', () => {
+      state.crop = null; state.prediction = null;
+      cropBtns.forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
+      destBtns.forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-pressed', 'false'); });
+      toPredictBtn.disabled = true;
+      plantBtn.disabled = true;
+      ['reflect-helped','reflect-limited','reflect-question'].forEach(id => document.getElementById(id).value = '');
+      showScreen('pick');
+    });
+
+    /* ========== Copy reflection ========== */
+    copyBtn.addEventListener('click', async () => {
+      const crop = CROP_DATA[state.crop]?.name || 'Unknown';
+      const prediction = DEST_META[state.prediction]?.name || 'Unknown';
+      const helped = document.getElementById('reflect-helped').value.trim();
+      const limited = document.getElementById('reflect-limited').value.trim();
+      const question = document.getElementById('reflect-question').value.trim();
+      const text =
+`Destination Comparator reflection
+Crop: ${crop}
+Prediction: ${prediction}
+
+What helped: ${helped}
+
+What limited: ${limited}
+
+Question for Module 2: ${question}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        copyConfirm.classList.remove('hidden');
+        setTimeout(() => copyConfirm.classList.add('hidden'), 2200);
+      } catch (e) {
+        alert('Copy failed. Select and copy manually:\n\n' + text);
+      }
+    });
+  </script>
+</body>
+</html>
