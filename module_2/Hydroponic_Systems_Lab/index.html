@@ -1,0 +1,4667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hydroponic Systems Lab</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'VT323', monospace;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* ── Scaling container ─────────────────────────────────────────
+     The game is always 960×640 internally. CSS scale() shrinks or
+     grows it to fit the viewport while keeping pixel-crisp edges.
+  ────────────────────────────────────────────────────────────── */
+  #scale-root {
+    width: 960px;
+    height: 640px;
+    transform-origin: center center;
+    /* scale is set by JS */
+  }
+
+  /* ── Game shell ──────────────────────────────────────────────── */
+  #game {
+    width: 960px;
+    height: 640px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    display: flex;
+    flex-direction: column;
+    color: #d1d5db;
+    position: relative;
+  }
+
+  /* ── CRT scanline overlay ─────────────────────────────────────── */
+  #game::after {
+    content: '';
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0,0,0,0.12),
+      rgba(0,0,0,0.12) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    z-index: 100;
+  }
+
+  /* ── Title bar ───────────────────────────────────────────────── */
+  #title-bar {
+    width: 960px;
+    height: 40px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border-bottom: 4px solid;
+    border-color: #444 #222 #222 #444;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    flex-shrink: 0;
+  }
+
+  #game-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 11px;
+    color: #06b6d4;
+    text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(6,182,212,0.5);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #game-logo {
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    image-rendering: auto;
+  }
+
+  #level-name {
+    flex: 1;
+    text-align: center;
+    font-size: 20px;
+    letter-spacing: 2px;
+    line-height: 1.05;
+    color: #d1d5db;
+    text-transform: uppercase;
+  }
+
+  #plant-name {
+    display: block;
+    font-size: 14px;
+    margin-top: 2px;
+  }
+
+  /* ── Title bar buttons (right side) ────────────────────────── */
+  #title-btns {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .title-circle-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #2a2a4a 0%, #1a1a2e 100%);
+    border: 2px solid #555;
+    color: #06b6d4;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 0 0 6px rgba(6,182,212,0.5);
+    transition: all 0.1s;
+  }
+
+  .title-circle-btn:hover {
+    border-color: #06b6d4;
+    background: linear-gradient(180deg, #3a3a5a 0%, #2a2a3e 100%);
+  }
+
+  .title-text-btn {
+    background: linear-gradient(180deg, #2a2a4a 0%, #1a1a2e 100%);
+    border: 2px solid #555;
+    color: #4ade80;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    cursor: pointer;
+    text-shadow: 0 0 6px rgba(74,222,128,0.4);
+    transition: all 0.1s;
+  }
+
+  .title-text-btn:hover {
+    border-color: #4ade80;
+    background: linear-gradient(180deg, #2a3a2a 0%, #1a2e1a 100%);
+  }
+
+
+  /* ── Content row (workspace+bottom on left, parts bin on right) */
+  #content {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #left-col {
+    width: 720px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+
+  /* ── Workspace ───────────────────────────────────────────────── */
+  #workspace {
+    width: 720px;
+    height: 504px;
+    flex-shrink: 0;
+    background-color: #0d1220;
+    position: relative;
+  }
+
+  /* Star canvas — sits at exact porthole position, behind the bg image */
+  #star-canvas {
+    position: absolute;
+    left: 55px;
+    top: 15px;
+    width: 100px;
+    height: 75px;
+    image-rendering: pixelated;
+  }
+
+  /* Workspace background PNG (transparent hole version) — above stars */
+  #workspace-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: url('sprites/workspace_bg.png');
+    background-size: 720px 504px;
+    background-repeat: no-repeat;
+    pointer-events: none;
+  }
+
+  /* Game canvas — grid and all game elements, above the bg */
+  #game-canvas {
+    position: absolute;
+    inset: 0;
+    image-rendering: pixelated;
+  }
+
+  /* placeholder label — remove once real image is in place */
+  #workspace-placeholder {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #1e2a3a;
+    font-size: 18px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Parts bin (full height of content area) ─────────────────── */
+  #parts-bin {
+    width: 240px;
+    flex: 1;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: 4px solid #222;
+  }
+
+  #parts-bin-header {
+    height: 30px;
+    background: linear-gradient(180deg, #222240 0%, #1a1a2e 100%);
+    border-bottom: 3px solid;
+    border-color: #444 #222 #222 #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: #4a6a8a;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  #clear-all-btn {
+    position: absolute;
+    right: 6px;
+    background: none;
+    border: 1px solid rgba(239,68,68,0.3);
+    color: rgba(239,68,68,0.5);
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    padding: 1px 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.1s;
+  }
+
+  #clear-all-btn:hover {
+    border-color: rgba(239,68,68,0.6);
+    color: rgba(239,68,68,0.8);
+    background: rgba(239,68,68,0.08);
+  }
+
+  #parts-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+    scrollbar-width: none;
+  }
+
+  #parts-list::-webkit-scrollbar { display: none; }
+
+  /* Sim log panel (replaces parts bin content when power is on) */
+  #sim-log-panel {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #sim-log-panel.active { display: flex; }
+  #sim-log-header {
+    height: 30px;
+    background: linear-gradient(180deg, #222240 0%, #1a1a2e 100%);
+    border-bottom: 3px solid;
+    border-color: #444 #222 #222 #444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    letter-spacing: 2px;
+    color: #3ada5a;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  #sim-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 10px;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    line-height: 1.4;
+    color: #b0b8c8;
+  }
+  #sim-log .log-entry {
+    margin-bottom: 6px;
+    border-bottom: 1px solid rgba(100,100,140,0.15);
+    padding-bottom: 4px;
+  }
+  #sim-log .log-entry .log-tick {
+    color: #4a6a8a;
+    font-size: 14px;
+  }
+  /* Custom scrollbar for sim log */
+  #sim-log::-webkit-scrollbar { width: 6px; }
+  #sim-log::-webkit-scrollbar-track { background: rgba(10,10,26,0.5); }
+  #sim-log::-webkit-scrollbar-thumb {
+    background: rgba(74,106,138,0.5);
+    border-radius: 3px;
+  }
+  #sim-log::-webkit-scrollbar-thumb:hover { background: rgba(74,106,138,0.8); }
+  #sim-log { scrollbar-width: thin; scrollbar-color: rgba(74,106,138,0.5) rgba(10,10,26,0.5); }
+
+  /* Custom tooltips */
+  .game-tooltip {
+    position: absolute;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 2px solid;
+    border-color: #555 #333 #333 #555;
+    color: #b0b8c8;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    padding: 4px 8px;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .game-tooltip.visible { opacity: 1; }
+
+  /* Grabbing cursor during drag */
+  #game.dragging, #game.dragging * { cursor: grabbing !important; }
+
+  /* ── Component config popover ───────────────────────────────── */
+  .config-popover {
+    position: absolute;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 4px solid;
+    border-color: #555 #333 #333 #555;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.8), inset 0 0 16px rgba(0,0,0,0.4);
+    padding: 12px 14px;
+    z-index: 95;
+    min-width: 160px;
+    display: none;
+  }
+  .config-popover.visible { display: block; }
+
+  .config-popover-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    color: #06b6d4;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    text-shadow: 0 0 6px rgba(6,182,212,0.4);
+  }
+
+  .config-option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    margin-bottom: 4px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.1s;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: #b0b8c8;
+    text-transform: uppercase;
+  }
+
+  .config-option:hover {
+    background: rgba(6,182,212,0.08);
+    border-color: rgba(6,182,212,0.2);
+  }
+
+  .config-option.selected {
+    background: rgba(6,182,212,0.12);
+    border-color: rgba(6,182,212,0.5);
+    color: #eaeaea;
+  }
+
+  .config-swatch {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #555;
+    flex-shrink: 0;
+  }
+
+  /* ── Level end modal stars ──────────────────────────────────── */
+  .end-star {
+    width: 32px;
+    height: 32px;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+    background: #1a1a2e;
+    border: none;
+    transition: background 0.3s, box-shadow 0.3s;
+  }
+  .end-star.earned {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245,158,11,0.6);
+  }
+
+  /* ── Lab Report modal ─────────────────────────────────────────── */
+  #report-panel {
+    width: 820px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 4px solid;
+    border-color: #444 #222 #222 #444;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.6);
+    color: #d1d5db;
+    display: flex;
+    flex-direction: column;
+    max-height: 580px;
+  }
+  #report-header {
+    padding: 16px 24px 12px;
+    border-bottom: 2px solid rgba(100,100,140,0.3);
+    flex-shrink: 0;
+  }
+  #report-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 11px;
+    color: #4ade80;
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(74,222,128,0.4);
+    margin-bottom: 6px;
+  }
+  #report-subtitle {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #b0b8c8;
+  }
+  #report-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+  #report-list {
+    width: 260px;
+    flex-shrink: 0;
+    border-right: 2px solid rgba(100,100,140,0.3);
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+  .report-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(100,100,140,0.12);
+    transition: background 0.15s;
+  }
+  .report-row:hover { background: rgba(58,106,138,0.2); }
+  .report-row.selected {
+    background: rgba(6,182,212,0.12);
+    border-left: 3px solid #06b6d4;
+    padding-left: 13px;
+  }
+  .report-row-num {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 8px;
+    color: #4a6a8a;
+    width: 16px;
+    flex-shrink: 0;
+    text-align: center;
+  }
+  .report-row-name {
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    color: #d1d5db;
+    flex: 1;
+    line-height: 1.1;
+  }
+  .report-grade {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    padding: 3px 6px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    letter-spacing: 0.5px;
+  }
+  .grade-OPTIMAL    { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.4); }
+  .grade-FUNCTIONAL { background: rgba(234,179,8,0.15);  color: #eab308; border: 1px solid rgba(234,179,8,0.4); }
+  .grade-PARTIAL    { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.4); }
+  .grade-FAILED     { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.4); }
+  .grade-INCOMPLETE { background: rgba(100,100,140,0.15); color: #4a6a8a; border: 1px solid rgba(100,100,140,0.3); }
+  .grade-STOPPED    { background: rgba(234,179,8,0.08);  color: #eab308; border: 1px dashed rgba(234,179,8,0.6); }
+
+  /* Stopped-early callout in the report detail panel */
+  .report-stopped-banner {
+    background: rgba(234,179,8,0.1);
+    border: 1px dashed rgba(234,179,8,0.5);
+    color: #eab308;
+    padding: 10px 12px;
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    line-height: 1.3;
+    margin-bottom: 14px;
+  }
+  .report-stopped-banner strong {
+    color: #f59e0b;
+    font-weight: normal;
+    letter-spacing: 1px;
+  }
+  #report-detail {
+    flex: 1;
+    padding: 20px 24px;
+    overflow-y: auto;
+  }
+  #report-detail-name {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 9px;
+    color: #06b6d4;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    text-shadow: 0 0 4px rgba(6,182,212,0.4);
+  }
+  .report-stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .report-stat {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(100,100,140,0.2);
+    padding: 8px 10px;
+  }
+  .report-stat-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #4a6a8a;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .report-stat-value {
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    color: #d1d5db;
+  }
+  .report-stat-value.good { color: #4ade80; }
+  .report-stat-value.warn { color: #eab308; }
+  .report-stat-value.bad  { color: #ef4444; }
+  .report-observations {
+    border-top: 1px dashed rgba(100,100,140,0.3);
+    padding-top: 12px;
+  }
+  .report-obs-label {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: #4a6a8a;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .report-obs-item {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #b0b8c8;
+    line-height: 1.3;
+    margin-bottom: 4px;
+    padding-left: 12px;
+    position: relative;
+  }
+  .report-obs-item::before {
+    content: '▸';
+    position: absolute;
+    left: 0;
+    color: #4a6a8a;
+  }
+  .report-obs-item.obs-good::before { color: #4ade80; }
+  .report-obs-item.obs-warn::before { color: #eab308; }
+  .report-detail-lesson {
+    font-family: 'VT323', monospace;
+    font-size: 17px;
+    color: #4a6a8a;
+    line-height: 1.35;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(100,100,140,0.2);
+  }
+  .report-empty {
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: #4a6a8a;
+    text-align: center;
+    margin-top: 40px;
+  }
+  #report-footer {
+    padding: 12px 24px 16px;
+    border-top: 2px solid rgba(100,100,140,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  #report-message {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #b0b8c8;
+    flex: 1;
+    padding-right: 20px;
+  }
+
+  .part-item {
+    height: 68px;
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 12px;
+    border-bottom: 1px solid #1a1a30;
+    cursor: grab;
+    transition: background 0.1s;
+  }
+
+  .part-item:hover {
+    background: rgba(6,182,212,0.06);
+  }
+
+  .part-thumb {
+    width: 48px;
+    height: 48px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 3px outset #444;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
+  }
+
+  /* Color-grouped borders: blue=water, green=grow, orange=sensors, cyan=fan, grey=pipes */
+  .part-thumb.reservoir  { border-color: rgba(58,138,218,0.4);  box-shadow: inset 0 0 8px rgba(58,138,218,0.15); }
+  .part-thumb.pump       { border-color: rgba(58,138,218,0.4);  box-shadow: inset 0 0 8px rgba(58,138,218,0.15); }
+  .part-thumb.channel    { border-color: rgba(74,222,128,0.4);  box-shadow: inset 0 0 8px rgba(74,222,128,0.15); }
+  .part-thumb.led        { border-color: rgba(74,222,128,0.4);  box-shadow: inset 0 0 8px rgba(74,222,128,0.15); }
+  .part-thumb.nutrient   { border-color: rgba(245,158,11,0.4);  box-shadow: inset 0 0 8px rgba(245,158,11,0.15); }
+  .part-thumb.sensor     { border-color: rgba(245,158,11,0.4);  box-shadow: inset 0 0 8px rgba(245,158,11,0.15); }
+  .part-thumb.fan        { border-color: rgba(6,182,212,0.4);   box-shadow: inset 0 0 8px rgba(6,182,212,0.15); }
+  .part-thumb.pipe       { border-color: rgba(85,85,112,0.4);   box-shadow: inset 0 0 8px rgba(0,0,0,0.3); }
+
+  .part-label {
+    flex: 1;
+    font-size: 22px;
+    letter-spacing: 1px;
+    color: #d1d5db;
+    text-transform: uppercase;
+  }
+
+  .part-count {
+    font-size: 20px;
+    color: #4a6a8a;
+    letter-spacing: 1px;
+  }
+
+  /* ── Bottom area (720px, under workspace only) ─────────────── */
+  #bottom {
+    width: 720px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #0f0f1a 0%, #0a0a14 100%);
+    border-top: 4px solid;
+    border-color: #444 #222 #222 #444;
+  }
+
+  /* ── Status bar ──────────────────────────────────────────────── */
+  #status-bar {
+    height: 56px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    gap: 28px;
+    border-bottom: 1px solid #1a1a2e;
+  }
+
+  #power-btn {
+    width: 68px;
+    height: 40px;
+    background: linear-gradient(180deg, #1a2a1a 0%, #0a140a 100%);
+    border: 3px outset #3a5a3a;
+    color: #2a5a2a;
+    font-family: 'VT323', monospace;
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex-shrink: 0;
+    text-shadow: 0 0 4px currentColor;
+    transition: all 0.1s;
+  }
+
+  #power-btn:active {
+    border-style: inset;
+    transform: translate(1px, 1px);
+  }
+
+  #power-btn.on {
+    background: linear-gradient(180deg, #0a2a0a 0%, #061406 100%);
+    border-color: #4ade80;
+    color: #4ade80;
+    box-shadow: 0 0 10px rgba(74,222,128,0.3), inset 0 0 8px rgba(0,0,0,0.5);
+  }
+
+  #power-btn-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2a4a2a;
+    color: #2a4a2a;
+  }
+
+  #power-btn.on #power-btn-dot {
+    background: #4ade80;
+    color: #4ade80;
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 4px currentColor; }
+    50%       { box-shadow: 0 0 12px currentColor, 0 0 20px currentColor; }
+  }
+
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .stat-label {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 7px;
+    letter-spacing: 1px;
+    color: #4a5a6a;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    color: #06b6d4;
+  }
+
+  .stat-value.ph    { color: #4ade80; }
+  .stat-value.light { color: #a855f7; }
+  .stat-value.nuts  { color: #ef4444; }
+  .stat-value.day   { color: #f59e0b; }
+
+  /* ── Info panel ──────────────────────────────────────────────── */
+  #info-panel {
+    height: 40px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+    overflow: hidden;
+  }
+
+  #info-text {
+    font-size: 18px;
+    letter-spacing: 1px;
+    color: #4ade80;
+    text-transform: uppercase;
+    line-height: 1.4;
+    opacity: 0.75;
+  }
+
+  /* ── Modal base styles ───────────────────────────────────────── */
+  .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+
+  .modal-backdrop.hidden { display: none; }
+
+  .retro-panel {
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 4px solid;
+    border-color: #444 #222 #222 #444;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 4px 16px rgba(0,0,0,0.6);
+    color: #d1d5db;
+    padding: 20px 24px;
+  }
+
+  .retro-panel h2 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 10px;
+    color: #06b6d4;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    text-shadow: 0 0 8px rgba(6,182,212,0.4);
+  }
+
+  .retro-btn {
+    background: linear-gradient(180deg, #4a4a4a 0%, #2a2a2a 50%, #1a1a1a 100%);
+    border: 3px outset #666;
+    color: #d1d5db;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    text-shadow: 2px 2px 0 #000;
+    cursor: pointer;
+    padding: 6px 16px;
+    transition: all 0.1s;
+  }
+
+  .retro-btn:hover {
+    background: linear-gradient(180deg, #5a5a5a 0%, #3a3a3a 50%, #2a2a2a 100%);
+  }
+
+  .retro-btn:active {
+    border-style: inset;
+    transform: translate(2px, 2px);
+  }
+
+  /* ── Pipe row in parts bin ─────────────────────────────────────── */
+  .pipe-row {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 10px 6px;
+    border-bottom: 1px solid #1a1a30;
+  }
+
+  .pipe-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: grab;
+    padding: 2px;
+    border-radius: 3px;
+    transition: background 0.1s;
+  }
+
+  .pipe-slot:hover {
+    background: rgba(6,182,212,0.06);
+  }
+
+  .pipe-slot .part-thumb {
+    width: 44px;
+    height: 44px;
+  }
+
+  .pipe-slot .part-count {
+    font-size: 18px;
+    color: #4a6a8a;
+    letter-spacing: 1px;
+  }
+
+  /* ── Thumbnail canvas inside part-thumb ──────────────────────── */
+  .part-thumb canvas {
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  /* ── Help & Guide modal content ──────────────────────────────── */
+  .modal-scroll {
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(74,106,138,0.5) rgba(10,10,26,0.5);
+  }
+  #help-modal .modal-scroll {
+    height: 425px;
+    max-height: none;
+  }
+  .modal-scroll::-webkit-scrollbar { width: 6px; }
+  .modal-scroll::-webkit-scrollbar-track { background: rgba(10,10,26,0.5); }
+  .modal-scroll::-webkit-scrollbar-thumb { background: rgba(74,106,138,0.5); border-radius: 3px; }
+
+  .help-section {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(100,100,140,0.15);
+  }
+  .help-section:last-child { border-bottom: none; }
+
+  .help-section h3 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    color: #f59e0b;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .help-section p, .help-section ul {
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    line-height: 1.4;
+    color: #b0b8c8;
+  }
+
+  .help-section ul { list-style: none; padding: 0; }
+  .help-section li { padding: 2px 0; }
+  .help-section li strong { color: #06b6d4; }
+
+  /* Help tabs */
+  .help-tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 16px;
+  }
+  .help-tab {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 7px;
+    color: #4a6a8a;
+    background: rgba(20,20,40,0.5);
+    border: 2px solid #333;
+    padding: 7px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.1s;
+  }
+  .help-tab:hover { color: #b0b8c8; background: rgba(30,30,50,0.8); }
+  .help-tab.active {
+    color: #06b6d4;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border-color: #06b6d4 #06b6d4 transparent #06b6d4;
+    text-shadow: 0 0 6px rgba(6,182,212,0.4);
+  }
+  .help-page { display: none; }
+  .help-page.active { display: block; }
+
+  /* Help thumbnails */
+  .help-thumbs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .help-thumb {
+    width: 64px;
+    height: 64px;
+    background: rgba(10,10,26,0.6);
+    border: 2px solid #333;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+  }
+  .help-thumb.w2 { width: 128px; }
+  .help-thumb.w2h2 { width: 128px; height: 128px; }
+
+  /* Parts info grid */
+  .parts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 20px;
+  }
+  .part-info {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  .part-info-name {
+    color: #06b6d4;
+    font-family: 'VT323', monospace;
+    font-size: 22px;
+    line-height: 1.1;
+  }
+  .part-info-desc {
+    color: #8a9aaa;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    line-height: 1.3;
+  }
+
+  .help-key {
+    display: inline-block;
+    background: #2a2a4a;
+    border: 1px solid #555;
+    padding: 0 6px;
+    font-size: 16px;
+    color: #eaeaea;
+    margin: 0 2px;
+    vertical-align: middle;
+  }
+
+  /* Field Guide */
+  .guide-content {
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    line-height: 1.5;
+    color: #b0b8c8;
+  }
+
+  .guide-content h3 {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 8px;
+    color: #f59e0b;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin: 16px 0 8px 0;
+  }
+  .guide-content h3:first-child { margin-top: 0; }
+
+  .guide-img {
+    float: left;
+    margin: 0 14px 8px 0;
+    border: 3px solid #333;
+    image-rendering: auto;
+  }
+  .guide-img.right {
+    float: right;
+    margin: 0 0 8px 14px;
+  }
+  .guide-img.noborder {
+    border: none;
+  }
+
+  .guide-req {
+    background: rgba(6,182,212,0.06);
+    border: 2px solid rgba(6,182,212,0.2);
+    padding: 10px 14px;
+    clear: both;
+  }
+  .guide-req li { padding: 2px 0; list-style: none; }
+  .guide-req li strong { color: #06b6d4; }
+
+  .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: 2px solid rgba(239,68,68,0.3);
+    color: rgba(239,68,68,0.6);
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+  }
+  .modal-close:hover {
+    border-color: rgba(239,68,68,0.6);
+    color: rgba(239,68,68,0.9);
+    background: rgba(239,68,68,0.08);
+  }
+
+  /* ── Level intro modal ─────────────────────────────────────── */
+  .intro-goal {
+    font-family: 'VT323', monospace;
+    font-size: 24px;
+    color: #5aca6a;
+    margin: 8px 0 12px;
+  }
+  .intro-desc {
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: #b0b8c8;
+    line-height: 1.4;
+    margin-bottom: 16px;
+  }
+  .intro-tips {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 20px;
+  }
+  .intro-tips li {
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: #8a9ab0;
+    padding: 4px 0 4px 20px;
+    position: relative;
+  }
+  .intro-tips li::before {
+    content: '\25B8';
+    position: absolute;
+    left: 4px;
+    color: #3acaca;
+  }
+  .intro-start-btn {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 12px;
+    padding: 10px 32px;
+    background: linear-gradient(180deg, #2a4a6a, #1a2a3a);
+    color: #5aca6a;
+    border: 2px solid #3a6a8a;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+  .intro-start-btn:hover {
+    background: linear-gradient(180deg, #3a5a7a, #2a3a4a);
+    border-color: #5aca6a;
+  }
+
+  /* ── Level select dropdown ──────────────────────────────────── */
+  #title-bar { position: relative; }
+  #level-name { cursor: pointer; }
+  #level-name:hover { color: #eaeaea; }
+  #level-select {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, #1a2a3a, #0a1520);
+    border: 2px solid #3a6a8a;
+    z-index: 100;
+    min-width: 340px;
+    padding: 8px 0;
+    display: none;
+  }
+  .level-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: #b0b8c8;
+    gap: 10px;
+  }
+  .level-option:hover { background: rgba(58, 106, 138, 0.3); }
+  .level-option.locked {
+    color: #4a5a6a;
+    cursor: default;
+  }
+  .level-option.locked:hover { background: none; }
+  .level-option.current { color: #5aca6a; }
+  .level-option-num {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 10px;
+    width: 24px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .level-option-name { flex: 1; }
+  .level-option-stars {
+    font-size: 18px;
+    color: #4a4a2a;
+    letter-spacing: 2px;
+    flex-shrink: 0;
+  }
+  .level-option-stars .earned { color: #eab308; }
+  .level-option-lock {
+    font-size: 16px;
+    color: #4a5a6a;
+  }
+
+  /* ── Tutorial tour system ─────────────────────────────────────── */
+  #tour-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 150;
+  }
+  .tour-spotlight {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid #06b6d4;
+    border-radius: 2px;
+    box-shadow:
+      0 0 0 9999px rgba(0, 0, 0, 0.78),
+      0 0 24px rgba(6, 182, 212, 0.7),
+      inset 0 0 12px rgba(6, 182, 212, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: tour-spotlight-pulse 2s ease-in-out infinite;
+  }
+  @keyframes tour-spotlight-pulse {
+    0%, 100% { box-shadow: 0 0 0 9999px rgba(0,0,0,0.78), 0 0 24px rgba(6,182,212,0.7), inset 0 0 12px rgba(6,182,212,0.3); }
+    50%       { box-shadow: 0 0 0 9999px rgba(0,0,0,0.78), 0 0 32px rgba(6,182,212,0.9), inset 0 0 16px rgba(6,182,212,0.5); }
+  }
+  .tour-card {
+    position: absolute;
+    width: 300px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border: 3px outset #06b6d4;
+    padding: 12px 14px 10px;
+    pointer-events: auto;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.8), 0 0 14px rgba(6,182,212,0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .tour-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px dashed #4a6a8a;
+  }
+  .tour-card-title {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 9px;
+    color: #06b6d4;
+    letter-spacing: 1px;
+    text-shadow: 0 0 4px rgba(6,182,212,0.6);
+  }
+  .tour-card-body {
+    font-size: 18px;
+    line-height: 1.25;
+    color: #d1d5db;
+    margin-bottom: 10px;
+    min-height: 64px;
+  }
+  .tour-card-body b { color: #06b6d4; }
+  .tour-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .tour-skip {
+    background: none;
+    border: none;
+    color: #4a6a8a;
+    font-family: 'VT323', monospace;
+    font-size: 15px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 4px 6px;
+  }
+  .tour-skip:hover { color: #8898a8; }
+  .tour-next {
+    font-family: 'Press Start 2P', cursive;
+    font-size: 9px;
+    padding: 8px 14px;
+    background: linear-gradient(180deg, #2a3040, #1a1a2e);
+    color: #06b6d4;
+    border: 2px outset #06b6d4;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-shadow: 0 0 4px rgba(6,182,212,0.5);
+  }
+  .tour-next:hover { background: linear-gradient(180deg, #06b6d4, #0a4a5a); color: #fff; }
+  .tour-hidden { display: none !important; }
+
+  /* ── Drag ghost ──────────────────────────────────────────────── */
+  #drag-ghost {
+    position: absolute;
+    pointer-events: none;
+    z-index: 90;
+    image-rendering: pixelated;
+    opacity: 0.75;
+    display: none;
+  }
+
+  /* ── Grid hover highlight ────────────────────────────────────── */
+  .part-item.dragging {
+    opacity: 0.4;
+  }
+
+</style>
+</head>
+<body>
+
+<div id="scale-root">
+<div id="game">
+
+  <!-- How to Play modal (tabbed) -->
+  <div class="modal-backdrop hidden" id="help-modal">
+    <div class="retro-panel" style="width:780px; position:relative">
+      <button class="modal-close" id="help-close">&times;</button>
+      <h2>How to Play</h2>
+
+      <div style="margin: 12px 0; padding-bottom: 12px; border-bottom: 1px solid rgba(100,100,140,0.2);">
+        <p style="font-family:'VT323',monospace; font-size:18px; color:#b0b8c8; margin-bottom:8px;">
+          Want to see the interface walkthrough again?
+        </p>
+        <button class="retro-btn" onclick="HSL_Tutorial.replayTour(); document.getElementById('help-close').click();">
+          Replay Tour
+        </button>
+      </div>
+
+      <div class="help-tabs">
+        <button class="help-tab active" data-tab="parts">Parts</button>
+        <button class="help-tab" data-tab="building">Building</button>
+        <button class="help-tab" data-tab="simulation">Simulation</button>
+        <button class="help-tab" data-tab="tips">Tips &amp; Scoring</button>
+      </div>
+
+      <div class="modal-scroll">
+
+      <!-- PARTS TAB -->
+      <div class="help-page active" id="help-parts">
+        <div class="parts-grid">
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="watertank.idle" data-w="2" data-h="2" style="width:64px;height:64px"></canvas>
+            <div>
+              <div class="part-info-name">Reservoir</div>
+              <div class="part-info-desc">Water supply for the entire system. Every system needs at least one.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="pump.idle"></canvas>
+            <div>
+              <div class="part-info-name">Pump</div>
+              <div class="part-info-desc">Pushes water through the system. Water enters one side and exits the other.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="growchannel.idle" data-w="2" style="width:64px;height:32px"></canvas>
+            <div>
+              <div class="part-info-name">Grow Channel</div>
+              <div class="part-info-desc">Where plants grow! Needs water flow, LED light above, and nutrients in the water. The heart of your farm.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="fan.off"></canvas>
+            <div>
+              <div class="part-info-name">Fan</div>
+              <div class="part-info-desc">Air circulation. Prevents CO<sub>2</sub> buildup around leaves. Must be placed within 2 cells of a grow channel.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="led.blue" data-w="2" style="width:64px;height:32px"></canvas>
+            <div>
+              <div class="part-info-name">LED Panel</div>
+              <div class="part-info-desc">Provides light for photosynthesis. Place 1&ndash;2 rows above a grow channel. Click-hold to set spectrum color.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="nutrient1"></canvas>
+            <div>
+              <div class="part-info-name">Nutrient Injector</div>
+              <div class="part-info-desc">Feeds nutrients into water flow. Supply depletes over time &mdash; watch the screen color! Click-hold to set concentration levels. </div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <div style="display:grid;grid-template-columns:32px 32px;grid-template-rows:32px 32px;gap:2px;flex-shrink:0">
+              <canvas class="help-thumb" data-sprite="pipe1.empty" style="width:32px;height:32px"></canvas>
+              <canvas class="help-thumb" data-sprite="pipe2.empty" style="width:32px;height:32px"></canvas>
+              <canvas class="help-thumb" data-sprite="pipe3.empty" style="width:32px;height:32px"></canvas>
+              <canvas class="help-thumb" data-sprite="pipe4.empty" style="width:32px;height:32px"></canvas>
+            </div>
+            <div>
+              <div class="part-info-name">Pipes</div>
+              <div class="part-info-desc">Straight, Elbow, T-Joint, and Cross. Route water between components. Click to rotate.</div>
+            </div>
+          </div>
+
+          <div class="part-info">
+            <canvas class="help-thumb" data-sprite="ph1"></canvas>
+            <div>
+              <div class="part-info-name">pH Sensor</div>
+              <div class="part-info-desc">Monitors water chemistry. Place inline in the pipe path to enable pH and nutrient readings in the status bar.</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- BUILDING TAB -->
+      <div class="help-page" id="help-building">
+        <div class="help-section">
+          <h3>Drag &amp; Place</h3>
+          <p>Drag any component from the <u>Parts Bin</u> on the right and drop it onto the workspace grid. Each level provides a limited set of parts &mdash; plan your layout before placing!</p>
+          <p style="margin-top:4px">You can also move placed parts to reposition them. Drop a part outside the grid to return it to the bin.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Rotate Parts</h3>
+          <div class="help-thumbs">
+            <canvas class="help-thumb" data-sprite="nutrient1" data-rot="0"></canvas>
+            <canvas class="help-thumb" data-sprite="nutrient1" data-rot="1"></canvas>
+            <canvas class="help-thumb" data-sprite="ph1" data-rot="2"></canvas>
+            <canvas class="help-thumb" data-sprite="ph1" data-rot="3"></canvas>
+          </div>
+          <p><strong>Click</strong> any rotatable component to rotate it 90&deg;. Pumps, pipes, nutrient injectors, and pH sensors all have directional ports that must face neighboring parts to connect.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Configure Components</h3>
+          <div class="help-thumbs">
+            <canvas class="help-thumb w2" data-sprite="led.blue" data-w="2"></canvas>
+            <canvas class="help-thumb w2" data-sprite="led.red" data-w="2"></canvas>
+            <canvas class="help-thumb w2" data-sprite="led.purple" data-w="2"></canvas>
+            <canvas class="help-thumb" data-sprite="nutrient1" data-nut-screen="#22c55e"></canvas>
+            <canvas class="help-thumb" data-sprite="nutrient1" data-nut-screen="#eab308"></canvas>
+            <canvas class="help-thumb" data-sprite="nutrient1" data-nut-screen="#ef4444"></canvas>
+          </div>
+          <p><strong>Click-hold</strong> (long press) on <strong>LED Panels</strong> to choose a light spectrum. Each plant species has a preferred spectrum &mdash; matching it gives a significant growth boost.</p>
+          <p style="margin-top:6px"><strong>Click-hold</strong> on <strong>Nutrient Injectors</strong> to set concentration level. Higher concentration feeds plants faster but depletes the supply sooner. The injector's screen shows remaining supply.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Connect Ports</h3>
+          <div class="help-thumbs">
+            <canvas class="help-thumb" data-sprite="pipe1.empty" data-dots="left,right"></canvas>
+            <canvas class="help-thumb" data-sprite="pipe2.empty" data-dots="bottom,right"></canvas>
+            <canvas class="help-thumb" data-sprite="pipe3.empty" data-dots="left,top,right"></canvas>
+            <canvas class="help-thumb" data-sprite="pipe4.empty" data-dots="top,right,bottom,left"></canvas>
+          </div>
+          <p><span style="color:#ef4444">Red dots</span> mark <strong>unconnected ports</strong>. Use pipes to link components into a complete water circuit. When two ports touch they connect automatically.</p>
+          <p style="margin-top:6px;color:#06b6d4">Reservoir &rarr; Pump &rarr; Grow Channel</p>
+          <p style="margin-top:4px">Nutrient injectors and pH sensors are <strong>inline components</strong> &mdash; place them between pipes in the water path, not off to the side.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Removing Parts</h3>
+          <ul>
+            <li><strong>Right-click</strong> any placed part to remove it (returns to bin)</li>
+            <li>Use the <strong>Clear</strong> button in the parts bin header to remove everything at once</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- SIMULATION TAB -->
+      <div class="help-page" id="help-simulation">
+        <div class="help-section">
+          <h3>Starting the Simulation</h3>
+          <p>Press the <strong style="color:#22c55e">POWER</strong> button in the bottom status bar to start. Water flows through the pipes, LEDs light up, fans spin, and plants begin growing day by day. Each real-time second equals one growing day.</p>
+          <p style="margin-top:6px">Press Power again to stop the simulation and return to building mode. All plant progress resets when you stop &mdash; so make sure your system is ready before powering on.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Status Bar Readings</h3>
+          <ul>
+            <li><strong>Flow</strong> &mdash; Check for gaps, <span style="color:#ef4444">ERR</span> means your pipe connections are broken.</li>
+            <li><strong>pH</strong> &mdash; Water acidity level. Requires a <strong>pH Sensor</strong> in the flow path. Most plants thrive at pH 5.5&ndash;6.5. Without nutrients, pH drifts to neutral (7.0).</li>
+            <li><strong>Light</strong> &mdash; The active LED spectrum. Match your plant's preference for the best growth multiplier. Wrong spectrum still works, just slower.</li>
+            <li><strong>Nutrients</strong> &mdash; Current nutrient concentration. Requires a <strong>pH Sensor</strong> to read. Shows NONE when injectors are depleted.</li>
+            <li><strong>Harvest</strong> &mdash; Estimated days until maturity. Color shows health: <span style="color:#22c55e">green</span> = thriving, <span style="color:#eab308">yellow</span> = stressed, <span style="color:#ef4444">red</span> = dying. Shows READY at full maturity.</li>
+            <li><strong>Day</strong> &mdash; Current simulation day counter.</li>
+          </ul>
+        </div>
+
+        <div class="help-section">
+          <h3>During Simulation</h3>
+          <p>The <u>System Log</u> shows real-time messages about system performance, plant growth milestones, and science facts about space agriculture.</p>
+          <p style="margin-top:6px">You can open <strong>Help</strong> or the <strong>Field Guide</strong> during simulation &mdash; the timer pauses and resumes automatically.</p>
+          <p style="margin-top:6px">The simulation ends when plants reach <u>full maturity</u> (harvest!) or when the <u>maximum growth period</u> expires. Either way, you'll see your rating and results.</p>
+        </div>
+      </div>
+
+      <!-- TIPS & SCORING TAB -->
+      <div class="help-page" id="help-tips">
+        <div class="help-section">
+          <h3>Scenario Results</h3>
+<p>When the simulation ends, you receive feedback based on how your system performed:</p>
+<ul style="margin-top:8px">
+  <li><strong style="color:#3ada5a">Strong result</strong> &mdash; Full maturity, health above 75%. Optimal conditions throughout.</li>
+  <li><strong style="color:#eab308">Crop reached maturity</strong> &mdash; Plants grew, but health was lower than ideal. Check light spectrum, nutrients, and airflow.</li>
+  <li><strong style="color:#f97316">Partial growth</strong> &mdash; Crop did not reach maturity. Review your system design and try again.</li>
+  <li><strong style="color:#ef4444">No establishment</strong> &mdash; Plants did not grow. Check water flow, LED placement, and pipe connections.</li>
+</ul>
+<p style="margin-top:6px">All scenarios are available from the start. You can revisit any scenario using the selector in the title bar.</p>
+        </div>
+
+        <div class="help-section">
+          <h3>Pro Tips</h3>
+          <ul>
+            <li>&bull; <strong>Check the Field Guide</strong> &mdash; Each plant has different light, nutrient, and airflow preferences. Open the Field Guide button to learn exactly what your current crop needs.</li>
+            <li>&bull; <strong>LED placement</strong> &mdash; LEDs work best 1&ndash;2 rows directly above grow channels. Too far away and plants get no light at all.</li>
+            <li>&bull; <strong>Airflow matters</strong> &mdash; Fans within 2 cells of a grow channel provide circulation. Without it, CO<sub>2</sub> pockets form around leaves.</li>
+            <li>&bull; <strong>Nutrient balance</strong> &mdash; High concentration depletes in ~10 days, Medium in ~15, Low in ~25. Plan around your plant's growth cycle length.</li>
+            <li>&bull; <strong>Watch the injector screen</strong> &mdash; The colored screen on nutrient injectors shows remaining supply at a glance. <span style="color:#22c55e">Green</span> = plenty, <span style="color:#eab308">yellow</span> = running low, <span style="color:#ef4444">red</span> = nearly empty.</li>
+            <li>&bull; <strong>Efficiency counts</strong> &mdash; Getting plants to maturity faster (close to the ideal growth days) earns a higher efficiency score.</li>
+          </ul>
+        </div>
+      </div>
+
+      </div><!-- /modal-scroll -->
+    </div>
+  </div>
+
+  <!-- Field Guide modal -->
+  <div class="modal-backdrop hidden" id="guide-modal">
+    <div class="retro-panel" style="width:780px; position:relative">
+      <button class="modal-close" id="guide-close">&times;</button>
+      <h2 id="guide-title">Field Guide: Lettuce</h2>
+      <div class="modal-scroll">
+        <div id="guide-body" class="guide-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scenario end modal -->
+  <div class="modal-backdrop hidden" id="level-end-modal">
+    <div class="retro-panel" style="min-width:320px; text-align:center">
+      <h2 id="level-end-title">Scenario Complete</h2>
+      <div id="level-end-summary" style="font-family:'VT323',monospace; font-size:22px; color:#b0b8c8; margin-bottom:8px"></div>
+      <div id="level-end-stats" style="font-family:'VT323',monospace; font-size:18px; color:#4a6a8a; margin-bottom:20px"></div>
+      <div style="display:flex; gap:12px; justify-content:center">
+        <button class="retro-btn" id="btn-retry">Try Again</button>
+        <button class="retro-btn" id="btn-next" style="display:none">Next Scenario</button>
+        <button class="retro-btn" id="btn-results" style="display:none">View Report</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lab Report modal -->
+  <div class="modal-backdrop hidden" id="complete-modal">
+    <div id="report-panel">
+      <div id="report-header">
+        <div id="report-title">LAB REPORT</div>
+        <div id="report-subtitle">Hydroponic Systems Lab — All Scenarios Complete</div>
+      </div>
+      <div id="report-body">
+        <div id="report-list"></div>
+        <div id="report-detail"></div>
+      </div>
+      <div id="report-footer">
+        <div id="report-message">Head back to the course to complete the Module 2 reflection assignment.</div>
+        <button class="retro-btn" id="btn-complete-close">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scenario intro modal -->
+  <div class="modal-backdrop hidden" id="intro-modal">
+    <div class="retro-panel" style="width:520px; text-align:center; position:relative">
+      <h2 id="intro-title" style="margin-bottom:4px">Scenario 1: Basic Nutrient Circuit</h2>
+      <div class="intro-goal" id="intro-goal"></div>
+      <div class="intro-desc" id="intro-desc" style="text-align:left"></div>
+      <ul class="intro-tips" id="intro-tips" style="text-align:left"></ul>
+      <button class="intro-start-btn" id="intro-start">Start Scenario</button>
+    </div>
+  </div>
+
+  <!-- Drag ghost (follows cursor during drag) -->
+  <canvas id="drag-ghost"></canvas>
+
+  <!-- Component config popover -->
+  <div class="config-popover" id="config-popover"></div>
+
+  <!-- Title bar -->
+  <div id="title-bar">
+    <div id="game-title"><img id="game-logo" src="sprites/interstellar-harvest-logo.png" alt="">Hydroponic Systems Lab</div>
+    <div id="level-name">Scenario 1: Basic Nutrient Circuit<span id="plant-name" style="color:#5aca6a">Lettuce</span></div>
+    <div id="title-btns">
+      <button class="title-text-btn" id="guide-btn">Field Guide</button>
+      <button class="title-circle-btn" id="help-btn">?</button>
+    </div>
+    <!-- Level select dropdown -->
+    <div id="level-select"></div>
+  </div>
+
+  <!-- Content row -->
+  <div id="content">
+
+    <!-- Left column: workspace + bottom bar -->
+    <div id="left-col">
+
+      <!-- Workspace -->
+      <div id="workspace">
+        <!-- Layer 1: star animation behind the porthole -->
+        <canvas id="star-canvas" width="100" height="75"></canvas>
+        <!-- Layer 2: background PNG with transparent porthole cutout -->
+        <div id="workspace-overlay"></div>
+        <!-- Layer 3: game grid and components -->
+        <canvas id="game-canvas" width="720" height="504"></canvas>
+      </div>
+
+      <!-- Bottom -->
+      <div id="bottom">
+        <div id="status-bar">
+          <button id="power-btn" data-tip="Start or end the simulation">
+            <div id="power-btn-dot"></div>
+            <span>Power</span>
+          </button>
+          <div class="stat" data-tip="Water circulation status">
+            <div class="stat-label">Flow</div>
+            <div class="stat-value flow">--</div>
+          </div>
+          <div class="stat" data-tip="Water acidity level (optimal: 5.5–6.5)">
+            <div class="stat-label">pH</div>
+            <div class="stat-value ph">--</div>
+          </div>
+          <div class="stat" data-tip="LED grow light spectrum">
+            <div class="stat-label">Light</div>
+            <div class="stat-value light">--</div>
+          </div>
+          <div class="stat" data-tip="Nutrient concentration in water">
+            <div class="stat-label">Nutrients</div>
+            <div class="stat-value nuts">--</div>
+          </div>
+          <div class="stat" data-tip="Days until harvest — red means plants are unhealthy">
+            <div class="stat-label">Harvest</div>
+            <div class="stat-value harvest">--</div>
+          </div>
+          <div class="stat" data-tip="Current simulation day" style="margin-left:auto; text-align:right; min-width:36px">
+            <div class="stat-label">Day</div>
+            <div class="stat-value day">--</div>
+          </div>
+        </div>
+
+        <div id="info-panel">
+          <div id="info-text">Drag components from the panel onto the workspace to begin.</div>
+        </div>
+      </div><!-- /bottom -->
+
+    </div><!-- /left-col -->
+
+    <!-- Parts bin (full height) -->
+    <div id="parts-bin">
+      <div id="parts-bin-header">Parts Bin<button id="clear-all-btn">Reset</button></div>
+      <div id="parts-list">
+
+        <div class="part-item" data-type="reservoir">
+          <div class="part-thumb reservoir"></div>
+          <div class="part-label">Reservoir</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="pump">
+          <div class="part-thumb pump"></div>
+          <div class="part-label">Pump</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="channel">
+          <div class="part-thumb channel"></div>
+          <div class="part-label">Grow Channel</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="led">
+          <div class="part-thumb led"></div>
+          <div class="part-label">LED Panel</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="fan">
+          <div class="part-thumb fan"></div>
+          <div class="part-label">Fan</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="nutrient">
+          <div class="part-thumb nutrient"></div>
+          <div class="part-label">Nutrients</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="part-item" data-type="sensor">
+          <div class="part-thumb sensor"></div>
+          <div class="part-label">pH Sensor</div>
+          <div class="part-count">×3</div>
+        </div>
+
+        <div class="pipe-row">
+          <div class="pipe-slot" data-type="pipe_straight">
+            <div class="part-thumb pipe"></div>
+            <div class="part-count">×12</div>
+          </div>
+          <div class="pipe-slot" data-type="pipe_elbow">
+            <div class="part-thumb pipe"></div>
+            <div class="part-count">×8</div>
+          </div>
+          <div class="pipe-slot" data-type="pipe_t">
+            <div class="part-thumb pipe"></div>
+            <div class="part-count">×6</div>
+          </div>
+          <div class="pipe-slot" data-type="pipe_cross">
+            <div class="part-thumb pipe"></div>
+            <div class="part-count">×4</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Sim log panel (shown when power is on) -->
+      <div id="sim-log-panel">
+        <div id="sim-log-header">System Log</div>
+        <div id="sim-log"></div>
+      </div>
+
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Tutorial spotlight tour -->
+  <div id="tour-layer">
+    <div id="tour-spotlight" class="tour-spotlight tour-hidden"></div>
+    <div id="tour-card" class="tour-card tour-hidden">
+      <div class="tour-card-header">
+        <div class="tour-card-title" id="tour-title">TITLE</div>
+      </div>
+      <div class="tour-card-body" id="tour-body">body</div>
+      <div class="tour-card-footer">
+        <button class="tour-skip" id="tour-skip" type="button">Skip tour</button>
+        <button class="tour-next" id="tour-next" type="button">NEXT →</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /game -->
+</div><!-- /scale-root -->
+
+<script>
+
+  // ── CONFIG ────────────────────────────────────────────────────
+  const GRID = {
+    originX:  47,
+    originY:  98,
+    cols:     10,
+    rows:     6,
+    cell:     64,
+  };
+
+  // Press G to toggle debug grid. ⚠ Remove before release.
+  let SHOW_DEBUG_GRID = false;
+  document.addEventListener('keydown', e => {
+    if (e.key === 'g' || e.key === 'G') {
+      e.preventDefault();
+      SHOW_DEBUG_GRID = !SHOW_DEBUG_GRID;
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      deleteSelected();
+    }
+  });
+
+  // ── Component type definitions ────────────────────────────────
+  // rotations: number of rotation steps (click to cycle). 0 or absent = not rotatable.
+  const COMP_DEFS = {
+    reservoir:     { label: 'Reservoir',    gridW: 2, gridH: 2, idleFrame: 'watertank.idle',    maxCount: 3, rotations: 0 },
+    pump:          { label: 'Pump',         gridW: 1, gridH: 1, idleFrame: 'pump.idle',         maxCount: 3, rotations: 4 },
+    channel:       { label: 'Grow Channel', gridW: 2, gridH: 1, idleFrame: 'growchannel.idle',  maxCount: 3, rotations: 0 },
+    led:           { label: 'LED Panel',    gridW: 2, gridH: 1, idleFrame: 'led.off',           maxCount: 3, rotations: 0 },
+    nutrient:      { label: 'Nutrients',    gridW: 1, gridH: 1, idleFrame: 'nutrient1',         maxCount: 3, rotations: 4 },
+    fan:           { label: 'Fan',          gridW: 1, gridH: 1, idleFrame: 'fan.off',           maxCount: 3, rotations: 0 },
+    sensor:        { label: 'pH Sensor',    gridW: 1, gridH: 1, idleFrame: 'ph1',               maxCount: 3, rotations: 4 },
+    pipe_straight: { label: 'Straight',     gridW: 1, gridH: 1, idleFrame: 'pipe1.empty',       maxCount: 12, pipeType: 1, rotations: 2 },
+    pipe_elbow:    { label: 'Elbow',        gridW: 1, gridH: 1, idleFrame: 'pipe2.empty',       maxCount: 8,  pipeType: 2, rotations: 4 },
+    pipe_t:        { label: 'T-Joint',      gridW: 1, gridH: 1, idleFrame: 'pipe3.empty',       maxCount: 6,  pipeType: 3, rotations: 4 },
+    pipe_cross:    { label: 'Cross',        gridW: 1, gridH: 1, idleFrame: 'pipe4.empty',       maxCount: 4,  pipeType: 4, rotations: 1 },
+  };
+
+  // ── Port definitions (base orientation, before rotation) ─────
+  // Each entry lists cell offsets (dr,dc) from component origin
+  // and which edges of that cell have a connection port.
+  // All ports sit at 16px (center) along the edge.
+  const PORT_DEFS = {
+    reservoir: [
+      // top row (0,0) and (0,1): no ports
+      { dr: 1, dc: 0, ports: ['left', 'bottom'] },   // bot-left cell
+      { dr: 1, dc: 1, ports: ['right', 'bottom'] },   // bot-right cell
+    ],
+    pump:          [{ dr: 0, dc: 0, ports: ['left', 'right'] }],
+    channel: [
+      { dr: 0, dc: 0, ports: ['left'] },              // left cell
+      { dr: 0, dc: 1, ports: ['right'] },              // right cell
+    ],
+    led:           [],   // light source — no water ports
+    nutrient:      [{ dr: 0, dc: 0, ports: ['left', 'right'] }],
+    fan:           [],   // air circulation — no water ports
+    sensor:        [{ dr: 0, dc: 0, ports: ['left', 'right'] }],
+    pipe_straight: [{ dr: 0, dc: 0, ports: ['left', 'right'] }],
+    pipe_elbow:    [{ dr: 0, dc: 0, ports: ['bottom', 'right'] }],
+    pipe_t:        [{ dr: 0, dc: 0, ports: ['left', 'top', 'right'] }],
+    pipe_cross:    [{ dr: 0, dc: 0, ports: ['top', 'right', 'bottom', 'left'] }],
+  };
+
+  const OPPOSITE   = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
+  const DIR_OFFSET = { top: [-1, 0], bottom: [1, 0], left: [0, -1], right: [0, 1] };
+
+  function rotatePort(port, steps) {
+    const order = ['top', 'right', 'bottom', 'left'];
+    return order[(order.indexOf(port) + steps) % 4];
+  }
+
+  // Get the actual ports for a placed component (rotation applied)
+  function getComponentPorts(comp) {
+    const base = PORT_DEFS[comp.type];
+    if (!base || base.length === 0) return [];
+    return base.map(cell => ({
+      row:   comp.row + cell.dr,
+      col:   comp.col + cell.dc,
+      ports: cell.ports.map(p => rotatePort(p, comp.rotation)),
+    }));
+  }
+
+  // Get port directions present at a specific grid cell
+  function getPortsAtCell(row, col) {
+    const comp = gridState[row]?.[col];
+    if (!comp) return [];
+    const cellPorts = getComponentPorts(comp);
+    const match = cellPorts.find(cp => cp.row === row && cp.col === col);
+    return match ? match.ports : [];
+  }
+
+  // Check all ports on the board and return connection state
+  function checkConnections() {
+    const results = [];
+    for (const comp of placedComponents) {
+      const cellPorts = getComponentPorts(comp);
+      for (const cp of cellPorts) {
+        for (const port of cp.ports) {
+          const [dr, dc] = DIR_OFFSET[port];
+          const nr = cp.row + dr;
+          const nc = cp.col + dc;
+          let connected = false;
+          if (nr >= 0 && nr < GRID.rows && nc >= 0 && nc < GRID.cols) {
+            const neighborPorts = getPortsAtCell(nr, nc);
+            connected = neighborPorts.includes(OPPOSITE[port]);
+          }
+          results.push({ row: cp.row, col: cp.col, port, connected });
+        }
+      }
+    }
+    return results;
+  }
+
+  // Draw small dots at port locations: green = connected, red = open
+  function drawConnectionDots() {
+    const connections = checkConnections();
+    for (const conn of connections) {
+      const cx = GRID.originX + conn.col * GRID.cell;
+      const cy = GRID.originY + conn.row * GRID.cell;
+      let dx, dy;
+      const half = GRID.cell / 2;
+      switch (conn.port) {
+        case 'top':    dx = cx + half; dy = cy;             break;
+        case 'bottom': dx = cx + half; dy = cy + GRID.cell; break;
+        case 'left':   dx = cx;             dy = cy + half; break;
+        case 'right':  dx = cx + GRID.cell; dy = cy + half; break;
+      }
+      if (conn.connected) continue;
+      gCtx.fillStyle = 'rgba(239, 68, 68, 0.7)';
+      gCtx.beginPath();
+      gCtx.arc(dx, dy, 3, 0, Math.PI * 2);
+      gCtx.fill();
+    }
+  }
+
+  // ── Flow pathfinding ───────────────────────────────────────────
+  // Traces water from reservoirs through pipes to pumps, then from
+  // pumps onward to grow channels.  Populates flowSet and pumpStates.
+
+  function computeFlow() {
+    flowSet.clear();
+    flowDir.clear();
+    pumpStates.clear();
+
+    const reservoirs = placedComponents.filter(c => c.type === 'reservoir');
+
+    for (const res of reservoirs) {
+      const resPumps = []; // pumps connected to THIS reservoir
+      const visited  = new Set();
+      visited.add(res);
+      const queue = [];
+
+      // Phase 1: trace from reservoir output → find pumps
+      // Allowed: pipes, sensor, nutrient.  Blocked: grow channel, LED, fan
+      const resPorts = getComponentPorts(res);
+      for (const cp of resPorts) {
+        for (const port of cp.ports) {
+          const [dr, dc] = DIR_OFFSET[port];
+          const nr = cp.row + dr, nc = cp.col + dc;
+          if (nr < 0 || nr >= GRID.rows || nc < 0 || nc >= GRID.cols) continue;
+          if (!getPortsAtCell(nr, nc).includes(OPPOSITE[port])) continue;
+          queue.push({ row: nr, col: nc, entryPort: OPPOSITE[port] });
+        }
+      }
+
+      while (queue.length > 0) {
+        const { row, col, entryPort } = queue.shift();
+        const comp = gridState[row][col];
+        if (!comp || visited.has(comp)) continue;
+        if (comp.type === 'channel' || comp.type === 'led' || comp.type === 'fan') continue;
+        if (comp.type === 'reservoir') continue;
+
+        visited.add(comp);
+
+        if (comp.type === 'pump') {
+          resPumps.push({ pump: comp, entryPort });
+          pumpStates.set(comp, 'running');
+          flowDir.set(comp, entryPort);
+          continue;
+        }
+
+        flowSet.add(comp);
+        flowDir.set(comp, entryPort);
+        const compPorts = getComponentPorts(comp);
+        for (const cp of compPorts) {
+          for (const port of cp.ports) {
+            if (port === entryPort && cp.row === row && cp.col === col) continue;
+            const [dr, dc] = DIR_OFFSET[port];
+            const nr = cp.row + dr, nc = cp.col + dc;
+            if (nr < 0 || nr >= GRID.rows || nc < 0 || nc >= GRID.cols) continue;
+            if (!getPortsAtCell(nr, nc).includes(OPPOSITE[port])) continue;
+            queue.push({ row: nr, col: nc, entryPort: OPPOSITE[port] });
+          }
+        }
+      }
+
+      // Mark this reservoir as flowing if it has connected pumps
+      if (resPumps.length > 0) flowSet.add(res);
+
+      // Phase 2: from each connected pump, push flow outward
+      for (const { pump, entryPort } of resPumps) {
+        flowSet.add(pump);
+        const pushPort = OPPOSITE[entryPort];
+
+        const visited2 = new Set();
+        visited2.add(pump);
+        const queue2 = [];
+
+        const pumpPorts = getComponentPorts(pump);
+        for (const cp of pumpPorts) {
+          for (const port of cp.ports) {
+            if (port !== pushPort) continue;
+            const [dr, dc] = DIR_OFFSET[port];
+            const nr = cp.row + dr, nc = cp.col + dc;
+            if (nr < 0 || nr >= GRID.rows || nc < 0 || nc >= GRID.cols) continue;
+            if (!getPortsAtCell(nr, nc).includes(OPPOSITE[port])) continue;
+            queue2.push({ row: nr, col: nc, entryPort: OPPOSITE[port] });
+          }
+        }
+
+        while (queue2.length > 0) {
+          const { row, col, entryPort: ep } = queue2.shift();
+          const comp = gridState[row][col];
+          if (!comp || visited2.has(comp)) continue;
+          if (comp.type === 'led' || comp.type === 'fan') continue;
+          if (comp.type === 'reservoir') continue;
+
+          visited2.add(comp);
+          flowSet.add(comp);
+          if (!flowDir.has(comp)) flowDir.set(comp, ep);
+
+          const compPorts = getComponentPorts(comp);
+          for (const cp of compPorts) {
+            for (const port of cp.ports) {
+              if (port === ep && cp.row === row && cp.col === col) continue;
+              const [dr, dc] = DIR_OFFSET[port];
+              const nr = cp.row + dr, nc = cp.col + dc;
+              if (nr < 0 || nr >= GRID.rows || nc < 0 || nc >= GRID.cols) continue;
+              if (!getPortsAtCell(nr, nc).includes(OPPOSITE[port])) continue;
+              queue2.push({ row: nr, col: nc, entryPort: OPPOSITE[port] });
+            }
+          }
+        }
+      }
+    } // end for each reservoir
+
+    // Mark any pumps not reached as 'error'
+    for (const comp of placedComponents) {
+      if (comp.type === 'pump' && !pumpStates.has(comp)) {
+        pumpStates.set(comp, 'error');
+      }
+    }
+  }
+
+  // Update component sprites based on flow state and power
+  function updateComponentSprites() {
+    for (const comp of placedComponents) {
+      const def = COMP_DEFS[comp.type];
+      if (gameMode !== 'simulating') {
+        // Power off — everything idle/off
+        comp.frame = def.idleFrame;
+        continue;
+      }
+
+      const flowing = flowSet.has(comp);
+
+      switch (comp.type) {
+        case 'pump':
+          const ps = pumpStates.get(comp) || 'idle';
+          if (ps === 'error')   comp.frame = 'pump.error';
+          else if (ps === 'running') comp.frame = animFrame ? 'pump.run2' : 'pump.run1';
+          else                  comp.frame = 'pump.idle';
+          break;
+
+        case 'reservoir':
+          comp.frame = flowing ? (animFrame ? 'watertank.run2' : 'watertank.run1') : 'watertank.idle';
+          break;
+
+        case 'channel':
+          comp.frame = flowing ? (animFrame ? 'growchannel.flow2' : 'growchannel.flow1') : 'growchannel.idle';
+          break;
+
+        case 'fan':
+          comp.frame = animFrame ? 'fan2' : 'fan1'; // fans spin when power is on
+          break;
+
+        case 'led':
+          if (comp.config && comp.config.spectrum) {
+            comp.frame = 'led.' + comp.config.spectrum;
+          } else {
+            comp.frame = 'led.off';
+          }
+          break;
+
+        case 'nutrient':
+          if (flowing && comp.config.supply > 0) {
+            comp.frame = animFrame ? 'nutrient2' : 'nutrient1';
+          } else {
+            comp.frame = 'nutrient1'; // frozen when depleted or no flow
+          }
+          break;
+
+        case 'sensor':
+          if (flowing) {
+            comp.frame = animFrame ? 'ph2' : 'ph1';
+          } else {
+            comp.frame = 'ph1';
+          }
+          break;
+
+        default:
+          // Pipes: swap filled/empty based on flow
+          if (def.pipeType) {
+            const base = 'pipe' + def.pipeType;
+            comp.frame = flowing ? base : base + '.empty';
+          }
+          break;
+      }
+    }
+  }
+
+  // ── Nutrient / Sensor screen overlays ─────────────────────────
+  // Draws colored rectangles over the small screens on nutrient/sensor sprites.
+  // Coordinates are in local sprite space (32×32).
+  const SCREEN_DEFS = {
+    nutrient: { x: 8, y: 17, w: 15, h: 8 },
+    sensor:   { x: 8, y: 4,  w: 15, h: 8 },
+  };
+
+  function drawScreenOverlay(comp, color) {
+    const sd = SCREEN_DEFS[comp.type];
+    if (!sd) return;
+    const px = GRID.originX + comp.col * GRID.cell;
+    const py = GRID.originY + comp.row * GRID.cell;
+    // Scale sprite-local coords by 2× to match 2× rendered sprites
+    const sx = sd.x * 2, sy = sd.y * 2, sw = sd.w * 2, sh = sd.h * 2;
+    const half = GRID.cell / 2;
+
+    if (comp.rotation) {
+      gCtx.save();
+      const cx = px + half, cy = py + half;
+      gCtx.translate(cx, cy);
+      gCtx.rotate(comp.rotation * Math.PI / 2);
+      gCtx.fillStyle = color;
+      gCtx.fillRect(-half + sx, -half + sy, sw, sh);
+      gCtx.restore();
+    } else {
+      gCtx.fillStyle = color;
+      gCtx.fillRect(px + sx, py + sy, sw, sh);
+    }
+  }
+
+  function getNutrientScreenColor(supply) {
+    if (supply > 0.6) return '#22c55e';  // green
+    if (supply > 0.3) return '#eab308';  // yellow
+    return '#ef4444';                     // red
+  }
+
+  // ── Growth calculation engine ──────────────────────────────────
+
+  // Check if an LED is above a grow channel (same col, 1–2 rows up)
+  function getLEDAboveChannel(channel) {
+    for (const comp of placedComponents) {
+      if (comp.type !== 'led') continue;
+      if (comp.col !== channel.col) continue;
+      const rowDiff = channel.row - comp.row;
+      if (rowDiff >= 1 && rowDiff <= 2) return comp;
+    }
+    return null;
+  }
+
+  // Get plant type for a channel (supports mixed-crop levels)
+  function getChannelPlantType(channel) {
+    return channel.plantType || currentPlantType;
+  }
+
+  function getLightFactor(channel) {
+    const plantDef = PLANT_DEFS[getChannelPlantType(channel)];
+    const led = getLEDAboveChannel(channel);
+    if (!led) return 0.0; // no light = no photosynthesis
+
+    const spectrum = led.config.spectrum;
+    if (spectrum === plantDef.lightPref) return 1.5;  // optimal match
+    if (spectrum === 'purple') return 1.2;             // full spectrum = good for all
+    return 0.8;                                        // wrong spectrum, still some growth
+  }
+
+  function getNutrientFactor(channel) {
+    const plantDef = PLANT_DEFS[getChannelPlantType(channel)];
+    const activeNuts = placedComponents.filter(c =>
+      c.type === 'nutrient' && flowSet.has(c) && c.config.supply > 0
+    );
+    if (activeNuts.length === 0) return 0.5; // base nutrition from water only
+
+    const conc = activeNuts[0].config.concentration;
+    if (conc === plantDef.nutrientPref) return 1.5; // perfect match
+    const levels = ['low', 'medium', 'high'];
+    const diff = Math.abs(levels.indexOf(conc) - levels.indexOf(plantDef.nutrientPref));
+    return diff === 1 ? 1.0 : 0.7; // 1 step off = ok, 2 steps = poor
+  }
+
+  // Fan within 2 cells of any cell the channel occupies
+  function isFanNearChannel(channel) {
+    for (const comp of placedComponents) {
+      if (comp.type !== 'fan') continue;
+      for (let dc = 0; dc < channel.gridW; dc++) {
+        const dr = Math.abs(comp.row - channel.row);
+        const dcc = Math.abs(comp.col - (channel.col + dc));
+        if (dr <= 2 && dcc <= 2) return true;
+      }
+    }
+    return false;
+  }
+
+  function getAirflowFactor(channel) {
+    const plantDef = PLANT_DEFS[getChannelPlantType(channel)];
+    return isFanNearChannel(channel) ? 1.0 : plantDef.noAirflowFactor;
+  }
+
+  function calculateGrowthRate(channel) {
+    const waterFactor    = flowSet.has(channel) ? 1.0 : 0.0;
+    const lightFactor    = getLightFactor(channel);
+    const nutrientFactor = getNutrientFactor(channel);
+    const airflowFactor  = getAirflowFactor(channel);
+    return waterFactor * lightFactor * nutrientFactor * airflowFactor;
+  }
+
+  // Health affects visual appearance (color/droop), not growth rate
+  function calculateHealth(channel) {
+    let health = 1.0;
+    if (!flowSet.has(channel)) health *= 0.3;
+    if (!getLEDAboveChannel(channel)) health *= 0.3;
+
+    const plantDef = PLANT_DEFS[getChannelPlantType(channel)];
+    if (plantDef.needsAirflow && !isFanNearChannel(channel)) health *= 0.4;
+
+    // pH penalty — skip if level has no nutrients (player can't control pH)
+    if (LEVELS[currentLevel].parts.nutrient > 0) {
+      const stats = getSystemStats();
+      if (stats.pH < plantDef.phRange[0] || stats.pH > plantDef.phRange[1]) {
+        health *= 0.7;
+      }
+    }
+    return Math.max(0, Math.min(1, health));
+  }
+
+  // ── Plant drawing functions ───────────────────────────────────
+  // Canvas path/bezier art. Plants grow upward from their slot position.
+
+  function drawPlantLettuce(ctx, x, y, growth, health) {
+    if (growth < 0.02) return;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const h = health;
+    const stemCol  = h > 0.5 ? '#1a6a2a' : '#6a6a2a';
+    const leafCol  = h > 0.5 ? '#3a9a4a' : '#8a9a3a';
+    const tipCol   = h > 0.5 ? '#5aca6a' : '#aaca5a';
+    ctx.globalAlpha = 0.5 + h * 0.5;
+
+    const scale = 0.5 + growth * 0.8;
+    ctx.scale(scale, scale);
+
+    // Stem
+    const stemH = 3 + growth * 7;
+    ctx.strokeStyle = stemCol;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -stemH);
+    ctx.stroke();
+
+    // Rosette of leaves (golden angle for natural look)
+    const leafCount = Math.max(2, Math.floor(growth * 8));
+    const leafLen = 3 + growth * 6;
+
+    for (let i = 0; i < leafCount; i++) {
+      const angle = i * 137.5 * Math.PI / 180;
+      const dist = leafLen * 0.4 + (i / leafCount) * leafLen * 0.6;
+      const lx = Math.cos(angle) * dist * 0.7;
+      const ly = -stemH + Math.sin(angle) * dist * 0.4;
+
+      ctx.fillStyle = i % 2 === 0 ? leafCol : tipCol;
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, leafLen * 0.5, leafLen * 0.35, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Center bud
+    ctx.fillStyle = tipCol;
+    ctx.beginPath();
+    ctx.arc(0, -stemH, leafLen * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawPlantTomato(ctx, x, y, growth, health) {
+    if (growth < 0.02) return;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const h = health;
+    const stemCol = h > 0.5 ? '#1a6a2a' : '#6a6a2a';
+    const leafCol = h > 0.5 ? '#3a9a4a' : '#8a9a3a';
+    const fruitCol = '#da3a3a';
+    ctx.globalAlpha = 0.5 + h * 0.5;
+
+    const scale = 0.5 + growth * 0.8;
+    ctx.scale(scale, scale);
+
+    // Main stem — grows taller than lettuce
+    const stemH = 4 + growth * 14;
+    ctx.strokeStyle = stemCol;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, -stemH);
+    ctx.stroke();
+
+    // Leaf pairs along stem
+    const leafPairs = Math.max(1, Math.floor(growth * 4));
+    for (let i = 0; i < leafPairs; i++) {
+      const ly = -4 - (i / leafPairs) * (stemH - 5);
+      const lSize = 3 + growth * 3;
+      const side = i % 2 === 0 ? -1 : 1;
+
+      ctx.fillStyle = leafCol;
+      ctx.beginPath();
+      ctx.ellipse(side * lSize, ly, lSize, lSize * 0.5, side * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Fruit at maturity (growth > 0.7)
+    if (growth > 0.7) {
+      const fruitCount = Math.floor((growth - 0.7) / 0.1) + 1;
+      for (let i = 0; i < Math.min(fruitCount, 3); i++) {
+        const fy = -stemH * 0.5 - i * 4;
+        const fx = (i % 2 === 0 ? 1 : -1) * 3;
+        const fSize = 2 + (growth - 0.7) * 5;
+        ctx.fillStyle = growth > 0.9 ? fruitCol : '#5a9a3a';
+        ctx.beginPath();
+        ctx.arc(fx, fy, fSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  function drawPlantWheat(ctx, x, y, growth, health) {
+    if (growth < 0.02) return;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const h = health;
+    const maturity = growth > 0.6 ? (growth - 0.6) / 0.4 : 0;
+    const r = Math.floor(58 + maturity * 160);
+    const g = Math.floor(154 - maturity * 10);
+    const b = Math.floor(74 - maturity * 50);
+    const stalkCol = h > 0.5 ? `rgb(${r},${g},${b})` : '#8a8a3a';
+    const headCol = h > 0.5 ? '#daa030' : '#9a9a4a';
+    ctx.globalAlpha = 0.5 + h * 0.5;
+
+    const scale = 0.5 + growth * 0.8;
+    ctx.scale(scale, scale);
+
+    // Thin tall stalk
+    const stalkH = 5 + growth * 16;
+    ctx.strokeStyle = stalkCol;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(0.5, -stalkH * 0.5, 0, -stalkH);
+    ctx.stroke();
+
+    // Seed head at top (appears after growth > 0.4)
+    if (growth > 0.4) {
+      const headH = 3 + (growth - 0.4) * 8;
+      const headW = 1.5 + (growth - 0.4) * 3;
+      ctx.fillStyle = growth > 0.6 ? headCol : stalkCol;
+      ctx.beginPath();
+      ctx.ellipse(0, -stalkH - headH * 0.3, headW, headH * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Awns (tiny whiskers)
+      if (growth > 0.6) {
+        ctx.strokeStyle = headCol;
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i < 4; i++) {
+          const ay = -stalkH - headH * 0.1 + i * headH * 0.2;
+          ctx.beginPath();
+          ctx.moveTo(0, ay);
+          ctx.lineTo(headW + 2, ay - 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(0, ay);
+          ctx.lineTo(-headW - 2, ay - 2);
+          ctx.stroke();
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  const PLANT_DRAW_FN = {
+    lettuce: drawPlantLettuce,
+    tomato:  drawPlantTomato,
+    wheat:   drawPlantWheat,
+  };
+
+  // Draw all plants on top of everything
+  function drawPlants() {
+    for (const comp of placedComponents) {
+      if (comp.type !== 'channel' || !comp.plants) continue;
+      const drawFn = PLANT_DRAW_FN[getChannelPlantType(comp)];
+      if (!drawFn) continue;
+      const px = GRID.originX + comp.col * GRID.cell;
+      const py = GRID.originY + comp.row * GRID.cell;
+
+      for (let i = 0; i < comp.plants.length; i++) {
+        const plant = comp.plants[i];
+        if (plant.growth <= 0) continue;
+        const slot = PLANT_SLOTS[i];
+        // Plants scale proportionally with the 2× grid
+        gCtx.save();
+        gCtx.translate(px + slot.x, py + slot.y);
+        gCtx.scale(2, 2);
+        drawFn(gCtx, 0, 0, plant.growth, plant.health);
+        gCtx.restore();
+      }
+    }
+  }
+
+  // Check if all plants have reached maturity
+  // Max days across all channels (for mixed crops, use the longest)
+  function getMaxDays() {
+    const channels = placedComponents.filter(c => c.type === 'channel');
+    if (channels.length === 0) return PLANT_DEFS[currentPlantType].maxDays;
+    return Math.max(...channels.map(ch => PLANT_DEFS[getChannelPlantType(ch)].maxDays));
+  }
+
+  function checkAllPlantsMatured() {
+    const channels = placedComponents.filter(c => c.type === 'channel' && c.plants);
+    if (channels.length === 0) return false;
+    return channels.every(ch => ch.plants.every(p => p.growth >= 1.0));
+  }
+
+  // ── Simulation engine ─────────────────────────────────────────
+
+  function simTickFn() {
+    simTick++;
+
+    // Deplete first active nutrient injector only (sequential fallback)
+    const activeNut = placedComponents.find(c =>
+      c.type === 'nutrient' && flowSet.has(c) && c.config.supply > 0
+    );
+    if (activeNut) {
+      const days = NUTRIENT_DAYS[activeNut.config.concentration] || 15;
+      activeNut.config.supply = Math.max(0, activeNut.config.supply - (1 / days));
+    }
+
+    // Recompute flow (in case nutrient depletion changes something)
+    computeFlow();
+
+    // Grow plants
+    for (const comp of placedComponents) {
+      if (comp.type !== 'channel' || !comp.plants) continue;
+
+      const plantDef = PLANT_DEFS[getChannelPlantType(comp)];
+      const rate   = calculateGrowthRate(comp);
+      const health = calculateHealth(comp);
+      const growthPerTick = rate / plantDef.growthDays;
+
+      for (const plant of comp.plants) {
+        plant.growth = Math.min(1.0, plant.growth + growthPerTick);
+        plant.health = plant.health * 0.8 + health * 0.2;
+      }
+    }
+
+    updateStatBar();
+    generateSimMessage(simTick);
+
+    // Auto-stop: all plants matured or max days reached
+    if (checkAllPlantsMatured()) {
+      clearInterval(simTimer); simTimer = null; // stop ticking immediately
+      addSimLogMessage('All plants have reached maturity! Harvest complete!', simTick);
+      const snap = snapshotResults();
+      setTimeout(() => {
+        showLevelEndModal('matured', snap);
+        gameMode = 'building';
+        document.getElementById('power-btn').classList.remove('on');
+        stopSim();
+      }, 2000);
+    } else if (simTick >= getMaxDays()) {
+      clearInterval(simTimer); simTimer = null;
+      addSimLogMessage('Maximum growth period reached. Simulation ending.', simTick);
+      const snap = snapshotResults();
+      setTimeout(() => {
+        showLevelEndModal('timeout', snap);
+        gameMode = 'building';
+        document.getElementById('power-btn').classList.remove('on');
+        stopSim();
+      }, 2000);
+    }
+  }
+
+  function startSim() {
+    simTick   = 1;
+
+    // Initialize plants on all grow channels
+    for (const comp of placedComponents) {
+      if (comp.type === 'channel') {
+        comp.plants = PLANT_SLOTS.map(() => ({ growth: 0, health: 1.0 }));
+      }
+    }
+
+    computeFlow();
+    updateComponentSprites();
+    updateStatBar();
+    updateInfoPanel();
+    showSimPanel();
+
+    // Immediate first message
+    generateSimMessage(1);
+
+    simTimer = setInterval(simTickFn, 1000);
+  }
+
+  function stopSim() {
+    if (simTimer) { clearInterval(simTimer); simTimer = null; }
+    flowSet.clear();
+    pumpStates.clear();
+    // Reset nutrient supply and clear plants
+    for (const comp of placedComponents) {
+      if (comp.type === 'nutrient' && comp.config) {
+        comp.config.supply = 1.0;
+      }
+      if (comp.type === 'channel') {
+        comp.plants = null;
+      }
+    }
+    updateComponentSprites();
+    resetStatBar();
+    hideSimPanel();
+    updateInfoPanel();
+  }
+
+  // ── Stat bar ──────────────────────────────────────────────────
+
+  function getSystemStats() {
+    // Check if a sensor is in the flow path
+    const hasSensor = placedComponents.some(c => c.type === 'sensor' && flowSet.has(c));
+
+    // Flow status
+    const hasFlow = placedComponents.some(c => c.type === 'channel' && flowSet.has(c));
+
+    // Active nutrient injectors in the flow path
+    const activeNutrients = placedComponents.filter(c =>
+      c.type === 'nutrient' && flowSet.has(c) && c.config.supply > 0
+    );
+    const hasNutrients = activeNutrients.length > 0;
+    const concentration = hasNutrients ? activeNutrients[0].config.concentration : 'none';
+
+    // pH: derived from nutrient concentration
+    let pH = 7.0; // neutral, no nutrients
+    if (hasNutrients) {
+      switch (concentration) {
+        case 'low':    pH = 6.5; break;
+        case 'medium': pH = 6.0; break;
+        case 'high':   pH = 5.5; break;
+      }
+    }
+
+    // LED spectrum
+    const activeLEDs = placedComponents.filter(c => c.type === 'led');
+    const spectrum = activeLEDs.length > 0 ? activeLEDs[0].config.spectrum : 'none';
+
+    return { hasFlow, hasSensor, pH, concentration, spectrum, hasNutrients };
+  }
+
+  function updateStatBar() {
+    const stats = getSystemStats();
+    const flowEl = document.querySelector('.stat-value.flow');
+    const phEl   = document.querySelector('.stat-value.ph');
+    const lightEl = document.querySelector('.stat-value.light');
+    const nutsEl  = document.querySelector('.stat-value.nuts');
+    const dayEl   = document.querySelector('.stat-value.day');
+
+    if (!flowEl) return; // safety
+
+    // Flow
+    flowEl.textContent = stats.hasFlow ? 'OK' : 'ERR';
+    flowEl.style.color = stats.hasFlow ? '#22c55e' : '#ef4444';
+
+    // pH — only visible with sensor
+    if (stats.hasSensor) {
+      phEl.textContent = stats.pH.toFixed(1);
+      phEl.style.color = (stats.pH >= 5.5 && stats.pH <= 6.5) ? '#22c55e'
+        : (stats.pH >= 5.0 && stats.pH <= 7.0) ? '#eab308' : '#ef4444';
+    } else {
+      phEl.textContent = '--';
+      phEl.style.color = '#8a8a9a';
+    }
+
+    // Light
+    if (stats.spectrum !== 'none') {
+      lightEl.textContent = stats.spectrum.toUpperCase();
+      const specColors = { red: '#da3a3a', blue: '#3a8ada', purple: '#9a3ada' };
+      lightEl.style.color = specColors[stats.spectrum] || '#eaeaea';
+    } else {
+      lightEl.textContent = 'NONE';
+      lightEl.style.color = '#ef4444';
+    }
+
+    // Nutrients — only visible with sensor
+    if (stats.hasSensor) {
+      if (stats.hasNutrients) {
+        nutsEl.textContent = stats.concentration.toUpperCase();
+        nutsEl.style.color = stats.concentration === 'medium' ? '#22c55e'
+          : stats.concentration === 'low' ? '#eab308' : '#eab308';
+      } else {
+        nutsEl.textContent = 'NONE';
+        nutsEl.style.color = '#ef4444';
+      }
+    } else {
+      nutsEl.textContent = '--';
+      nutsEl.style.color = '#8a8a9a';
+    }
+
+    // Harvest countdown — colored by plant health
+    const harvestEl = document.querySelector('.stat-value.harvest');
+    const channels = placedComponents.filter(c => c.type === 'channel' && c.plants);
+    if (channels.length > 0) {
+      const allPlants = channels.flatMap(ch => ch.plants);
+      const avgGrowth = allPlants.reduce((s, p) => s + p.growth, 0) / allPlants.length;
+      const avgHealth = allPlants.reduce((s, p) => s + p.health, 0) / allPlants.length;
+      const maxGrowthDays = Math.max(...channels.map(ch => PLANT_DEFS[getChannelPlantType(ch)].growthDays));
+      const daysLeft = Math.max(0, Math.ceil((1.0 - avgGrowth) * maxGrowthDays));
+
+      if (avgGrowth >= 1.0) {
+        harvestEl.textContent = 'READY';
+        harvestEl.style.color = '#22c55e';
+      } else {
+        harvestEl.textContent = daysLeft + 'd';
+        harvestEl.style.color = avgHealth > 0.7 ? '#22c55e' : avgHealth > 0.4 ? '#eab308' : '#ef4444';
+      }
+    } else {
+      harvestEl.textContent = '--';
+      harvestEl.style.color = '#8a8a9a';
+    }
+
+    // Day
+    dayEl.textContent = simTick;
+    dayEl.style.color = '#eaeaea';
+  }
+
+  function resetStatBar() {
+    document.querySelectorAll('.stat-value').forEach(el => {
+      el.textContent = '--';
+      el.style.color = '#8a8a9a';
+    });
+  }
+
+  // ── Info panel (bottom single line) ───────────────────────────
+
+  let infoPanelLocked = false;
+
+  function updateInfoPanel() {
+    if (infoPanelLocked) return;
+    const el = document.getElementById('info-text');
+    if (gameMode === 'building') {
+      if (placedComponents.length === 0) {
+        el.textContent = 'Drag components from the panel onto the workspace to begin.';
+      } else {
+        const hasPump    = placedComponents.some(c => c.type === 'pump');
+        const hasChannel = placedComponents.some(c => c.type === 'channel');
+        const hasTank    = placedComponents.some(c => c.type === 'reservoir');
+        const openPorts  = checkConnections().some(c => !c.connected);
+
+        if (!hasTank)         el.textContent = 'Add a reservoir — it holds the nutrient solution for the system.';
+        else if (!hasPump)    el.textContent = 'Add a pump to circulate solution through the pipes.';
+        else if (!hasChannel) el.textContent = 'Add a grow channel — this is where plant roots are suspended.';
+        else if (openPorts)   el.textContent = 'Connect open ports with pipes — red dots show unconnected ports.';
+        else                  el.textContent = 'System is connected. Press the power button to run the simulation.';
+      }
+    }
+    // During sim, info panel messages will be driven by sim state (future)
+  }
+
+  // ── Sim log (typewriter panel) ─────────────────────────────────
+
+  const simLogEl     = document.getElementById('sim-log');
+  const simLogPanel  = document.getElementById('sim-log-panel');
+  const partsBinHead = document.getElementById('parts-bin-header');
+  const partsList    = document.getElementById('parts-list');
+  let typewriterTimer = null;
+  let pendingMessages = [];
+
+  function showSimPanel() {
+    partsBinHead.style.display = 'none';
+    partsList.style.display    = 'none';
+    simLogPanel.classList.add('active');
+    simLogEl.innerHTML = '';
+    pendingMessages = [];
+  }
+
+  function hideSimPanel() {
+    simLogPanel.classList.remove('active');
+    partsBinHead.style.display = '';
+    partsList.style.display    = '';
+    if (typewriterTimer) { clearInterval(typewriterTimer); typewriterTimer = null; }
+    pendingMessages = [];
+  }
+
+  function addSimLogMessage(text, tick) {
+    pendingMessages.push({ text, tick });
+    if (!typewriterTimer) processNextMessage();
+  }
+
+  function processNextMessage() {
+    if (pendingMessages.length === 0) { typewriterTimer = null; return; }
+    const msg = pendingMessages.shift();
+
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    const tickSpan = document.createElement('span');
+    tickSpan.className = 'log-tick';
+    tickSpan.textContent = 'Day ' + msg.tick + ': ';
+    entry.appendChild(tickSpan);
+    const textSpan = document.createElement('span');
+    entry.appendChild(textSpan);
+    simLogEl.appendChild(entry);
+
+    let charIdx = 0;
+    typewriterTimer = setInterval(() => {
+      if (charIdx < msg.text.length) {
+        textSpan.textContent += msg.text[charIdx];
+        charIdx++;
+        // Auto-scroll to bottom while typing
+        simLogEl.scrollTop = simLogEl.scrollHeight;
+      } else {
+        clearInterval(typewriterTimer);
+        typewriterTimer = null;
+        // Process next queued message after a small pause
+        setTimeout(() => processNextMessage(), 200);
+      }
+    }, 33); // ~30 chars/sec
+  }
+
+  // Generate sim messages based on game state
+  function generateSimMessage(tick) {
+    const stats = getSystemStats();
+
+    // First tick — system startup
+    if (tick === 1) {
+      if (stats.hasFlow) {
+        addSimLogMessage('System powered on. Water circulating...', tick);
+      } else {
+        addSimLogMessage('System powered on. WARNING: No water flow detected!', tick);
+      }
+      return;
+    }
+
+    // Every ~5 ticks, add a contextual message
+    if (tick % 5 !== 0) return;
+
+    const messages = [];
+
+    // Flow-related
+    if (!stats.hasFlow) {
+      messages.push('No water flow detected. Check pump connections.');
+    }
+
+    // Light-related
+    if (stats.spectrum !== 'none') {
+      const specFacts = {
+        blue: 'Blue-spectrum light promotes compact, leafy vegetative growth.',
+        red: 'Red-spectrum light promotes flowering and fruiting.',
+        purple: 'Full-spectrum light provides balanced growth across all stages.',
+      };
+      if (specFacts[stats.spectrum]) messages.push(specFacts[stats.spectrum]);
+    } else {
+      messages.push('No LED light detected. Plants need light for photosynthesis.');
+    }
+
+    // Nutrient-related
+    if (stats.hasSensor) {
+      if (!stats.hasNutrients) {
+        messages.push('Nutrient supply depleted. pH drifting toward neutral.');
+      } else if (stats.concentration === 'high') {
+        messages.push('High nutrient concentration detected. pH is acidic at ' + stats.pH.toFixed(1) + '.');
+      }
+    }
+
+    // Growth-related
+    const growChannels = placedComponents.filter(c => c.type === 'channel' && c.plants);
+    if (growChannels.length > 0) {
+      const allP = growChannels.flatMap(ch => ch.plants);
+      const avgG = allP.reduce((s, p) => s + p.growth, 0) / allP.length;
+      const avgH = allP.reduce((s, p) => s + p.health, 0) / allP.length;
+      if (avgG > 0.25 && avgG < 0.35) messages.push('Seedlings developing nicely. Root systems establishing.');
+      if (avgG > 0.5 && avgG < 0.6)  messages.push('Plants at 50% maturity. Vegetative growth phase in full swing.');
+      if (avgG > 0.75 && avgG < 0.85) messages.push('Plants approaching maturity. Looking healthy!');
+      if (avgG > 0.95) messages.push('Plants nearly ready for harvest!');
+      if (avgH < 0.5) messages.push('WARNING: Plant health declining. Check water, light, and nutrient levels.');
+    }
+
+    // Fan-related (only show if fans are available in this level)
+    const level = LEVELS[currentLevel];
+    if (level.parts.fan > 0) {
+      const hasFan = placedComponents.some(c => c.type === 'fan');
+      if (!hasFan) {
+        messages.push('No air circulation fan detected. CO\u2082 may accumulate around leaves.');
+      }
+    }
+
+    // Science facts (rotate through)
+    const scienceFacts = [
+      'NASA\'s Veggie system on the ISS has successfully grown red romaine lettuce.',
+      'In microgravity, water forms floating spheres due to surface tension.',
+      'Air circulation is critical in space \u2014 without gravity-driven convection, CO\u2082 pockets form around leaves.',
+      'Plants use phototropism (growing toward light) as their primary directional cue in space.',
+      'The ISS recycles about 90% of its water. Mars farms will need near 100%.',
+      'Astronaut crops must be compact, fast-growing, and nutritious \u2014 leafy greens come first.',
+      'LED-only growing saves energy. Different crop stages need different light recipes.',
+    ];
+
+    if (messages.length === 0 || Math.random() > 0.5) {
+      messages.push(scienceFacts[Math.floor(tick / 5) % scienceFacts.length]);
+    }
+
+    // Pick one message
+    if (messages.length > 0) {
+      addSimLogMessage(messages[Math.floor(Math.random() * messages.length)], tick);
+    }
+  }
+
+  // ── Spritesheet loader ────────────────────────────────────────
+  const spriteImg  = new Image();
+  spriteImg.src    = 'sprites/spritesheet.png';
+  let spriteFrames = {};
+  let spriteReady  = false;
+  let framesLoaded = false;
+  let imgLoaded    = false;
+
+  function onAssetsReady() {
+    spriteReady = true;
+    drawBinThumbnails();
+  }
+
+  fetch('sprites/spritesheet.json')
+    .then(r => r.json())
+    .then(json => {
+      json.frames.forEach(f => {
+        const key = f.filename.replace(/\.\w+$/, '');
+        spriteFrames[key] = f.frame;
+      });
+      framesLoaded = true;
+      if (imgLoaded) onAssetsReady();
+    });
+
+  spriteImg.onload = () => {
+    imgLoaded = true;
+    if (framesLoaded) onAssetsReady();
+  };
+
+  function drawSprite(ctx, frameName, dx, dy, rotation, scale) {
+    const fr = spriteFrames[frameName];
+    if (!fr || !spriteReady) return;
+    const s  = scale || 1;
+    const dw = fr.w * s;
+    const dh = fr.h * s;
+    if (rotation) {
+      ctx.save();
+      const cx = dx + dw / 2;
+      const cy = dy + dh / 2;
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation * Math.PI / 2);
+      ctx.drawImage(spriteImg, fr.x, fr.y, fr.w, fr.h, -dw / 2, -dh / 2, dw, dh);
+      ctx.restore();
+    } else {
+      ctx.drawImage(spriteImg, fr.x, fr.y, fr.w, fr.h, dx, dy, dw, dh);
+    }
+  }
+
+  // ── Draw sprite thumbnails in parts bin ───────────────────────
+  function drawBinThumbnails() {
+    // Regular part items
+    document.querySelectorAll('.part-item[data-type]').forEach(el => {
+      const type = el.dataset.type;
+      const def  = COMP_DEFS[type];
+      if (!def) return;
+      const thumb = el.querySelector('.part-thumb');
+      const cvs   = document.createElement('canvas');
+      cvs.width   = def.gridW * 32;
+      cvs.height  = def.gridH * 32;
+      const ctx   = cvs.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      drawSprite(ctx, def.idleFrame, 0, 0, 0);
+      thumb.innerHTML = '';
+      thumb.appendChild(cvs);
+    });
+
+    // Pipe slots
+    document.querySelectorAll('.pipe-slot[data-type]').forEach(el => {
+      const type = el.dataset.type;
+      const def  = COMP_DEFS[type];
+      if (!def) return;
+      const thumb = el.querySelector('.part-thumb');
+      const cvs   = document.createElement('canvas');
+      cvs.width   = 32;
+      cvs.height  = 32;
+      const ctx   = cvs.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      drawSprite(ctx, def.idleFrame, 0, 0, 0);
+      thumb.innerHTML = '';
+      thumb.appendChild(cvs);
+    });
+  }
+
+  // ── Game state ────────────────────────────────────────────────
+  const gridState = [];
+  for (let r = 0; r < GRID.rows; r++) {
+    gridState[r] = new Array(GRID.cols).fill(null);
+  }
+
+  const placedComponents = [];
+  let selectedComponent  = null;
+
+  // Simulation state
+  let gameMode   = 'building';  // 'building' | 'simulating'
+  let simTick    = 0;
+  let simTimer   = null;
+  let animFrame  = 0;           // toggles 0/1 each tick for sprite animation
+  const flowSet  = new Set();   // components with active water flow
+  const flowDir  = new Map();   // comp → entryPort (direction water enters from)
+  const pumpStates = new Map(); // pump comp → 'idle'|'error'|'running'
+
+  // Parts bin available counts
+  const binCounts = {};
+  Object.keys(COMP_DEFS).forEach(type => {
+    binCounts[type] = COMP_DEFS[type].maxCount;
+  });
+
+  function updateBinDisplay() {
+    document.querySelectorAll('.part-item[data-type]').forEach(el => {
+      const type  = el.dataset.type;
+      const count = binCounts[type];
+      el.querySelector('.part-count').textContent = '×' + count;
+      el.style.opacity = count > 0 ? '1' : '0.35';
+      el.style.pointerEvents = count > 0 ? 'auto' : 'none';
+    });
+    document.querySelectorAll('.pipe-slot[data-type]').forEach(el => {
+      const type  = el.dataset.type;
+      const count = binCounts[type];
+      el.querySelector('.part-count').textContent = '×' + count;
+      el.style.opacity = count > 0 ? '1' : '0.35';
+      el.style.pointerEvents = count > 0 ? 'auto' : 'none';
+    });
+  }
+  updateBinDisplay();
+
+  // ── Grid helpers ──────────────────────────────────────────────
+  function pxToGrid(px, py) {
+    const col = Math.floor((px - GRID.originX) / GRID.cell);
+    const row = Math.floor((py - GRID.originY) / GRID.cell);
+    return { col, row };
+  }
+
+  function canPlace(col, row, gridW, gridH) {
+    for (let r = 0; r < gridH; r++) {
+      for (let c = 0; c < gridW; c++) {
+        const gr = row + r;
+        const gc = col + c;
+        if (gr < 0 || gr >= GRID.rows || gc < 0 || gc >= GRID.cols) return false;
+        if (gridState[gr][gc] !== null) return false;
+      }
+    }
+    return true;
+  }
+
+  // Default config per component type
+  function getDefaultConfig(type) {
+    switch (type) {
+      case 'led':      return { spectrum: 'blue' };
+      case 'nutrient': return { concentration: 'medium', supply: 1.0 }; // 1.0 = full
+      default:         return {};
+    }
+  }
+
+  // Nutrient supply duration (days) per concentration level
+  const NUTRIENT_DAYS = { low: 25, medium: 15, high: 10 };
+
+  // ── Plant definitions (data-driven) ──────────────────────────
+  // Real science: lettuce prefers blue (vegetative), tomato red (fruiting),
+  // wheat full-spectrum. Airflow critical for tomatoes (mold prevention in μg).
+  const PLANT_DEFS = {
+    lettuce: {
+      name: 'Lettuce',
+      growthDays: 30,       // ticks to mature at 1.0 growth rate
+      maxDays: 45,          // sim auto-stops here
+      lightPref: 'blue',    // blue promotes compact leafy growth
+      nutrientPref: 'medium',
+      phRange: [5.5, 6.5],
+      needsAirflow: false,
+      noAirflowFactor: 0.85,
+    },
+    tomato: {
+      name: 'Tomato',
+      growthDays: 50,
+      maxDays: 75,
+      lightPref: 'red',     // red promotes flowering + fruiting
+      nutrientPref: 'high',
+      phRange: [5.5, 6.5],
+      needsAirflow: true,
+      noAirflowFactor: 0.3, // severe — mold in microgravity
+    },
+    wheat: {
+      name: 'Wheat',
+      growthDays: 70,
+      maxDays: 100,
+      lightPref: 'purple',  // balanced full spectrum
+      nutrientPref: 'medium',
+      phRange: [5.5, 6.5],
+      needsAirflow: false,
+      noAirflowFactor: 0.85,
+    },
+  };
+
+  // Plant slot positions within grow channel (px offset from channel top-left, 2× scale)
+  const PLANT_SLOTS = [
+    { x: 32, y: 8 },
+    { x: 52, y: 8 },
+    { x: 76, y: 8 },
+    { x: 98, y: 8 },
+  ];
+
+  let currentPlantType = 'lettuce';  // set per level
+  let currentLevel = 0;
+
+  // ── Scenario definitions ────────────────────────────────────────
+  const LEVELS = [
+    {
+      name: 'Basic Nutrient Circuit',
+      plantType: 'lettuce',
+      intro: {
+        title: 'Scenario 1: Basic Nutrient Circuit',
+        goal: 'Build a working hydroponic circuit and grow lettuce to maturity.',
+        desc: 'A hydroponic system has three core components: a reservoir holding nutrient solution, a pump to move it, and a grow channel where plant roots are suspended in the solution. Connect them with pipes and add an LED panel above the grow channel for light. When the system is connected, run the simulation.',
+        tips: [
+          'Water flows from the reservoir through the pump and into the grow channel.',
+          'The LED panel must be placed directly above the grow channel to provide light.',
+          'Lettuce grows best under blue-spectrum light — it promotes compact, leafy growth.',
+        ],
+      },
+      parts: {
+        reservoir: 1, pump: 1, channel: 1, led: 1,
+        nutrient: 0, fan: 0, sensor: 0,
+        pipe_straight: 8, pipe_elbow: 4, pipe_t: 0, pipe_cross: 0,
+      },
+    },
+    {
+      name: 'Nutrient Management',
+      plantType: 'lettuce',
+      intro: {
+        title: 'Scenario 2: Nutrient Management',
+        goal: 'Add a nutrient injector and grow higher-quality lettuce.',
+        desc: 'Water alone supports basic growth, but hydroponic systems deliver dissolved nutrients directly to plant roots in precisely controlled concentrations. Too little and plants starve. Too much can burn roots and shift pH outside the safe range. Add a nutrient injector inline with your pipes and configure it for lettuce. Click a placed injector to set its concentration.',
+        tips: [
+          'Place the nutrient injector between the pump and grow channel.',
+          'Click a placed injector to change its concentration. Lettuce prefers medium.',
+          'Nutrient supply depletes over time — watch the indicator on the injector.',
+        ],
+      },
+      parts: {
+        reservoir: 1, pump: 1, channel: 1, led: 1,
+        nutrient: 2, fan: 0, sensor: 0,
+        pipe_straight: 8, pipe_elbow: 6, pipe_t: 0, pipe_cross: 0,
+      },
+    },
+    {
+      name: 'Airflow & Environmental Control',
+      plantType: 'tomato',
+      intro: {
+        title: 'Scenario 3: Airflow & Environmental Control',
+        goal: 'Grow tomatoes — a more demanding crop that requires active airflow.',
+        desc: 'In microgravity, warm air does not rise and cool air does not sink. Without gravity-driven convection, humid air clings to plant surfaces and CO₂ pools around leaves — creating conditions for mold, fungal infection, and ethylene buildup. Tomatoes are especially vulnerable. A circulation fan solves this. You also have a pH sensor this time, which lets you monitor nutrient and acidity levels on the status bar.',
+        tips: [
+          'Place a fan within two grid cells of the grow channel.',
+          'Tomatoes need red-spectrum light and high nutrient concentration.',
+          'The pH sensor unlocks the pH and nutrient readings in the status bar.',
+          'Tomato growth takes around 50 days — make sure your nutrient supply lasts.',
+        ],
+      },
+      parts: {
+        reservoir: 1, pump: 1, channel: 1, led: 1,
+        nutrient: 3, fan: 1, sensor: 1,
+        pipe_straight: 10, pipe_elbow: 6, pipe_t: 2, pipe_cross: 0,
+      },
+    },
+    {
+      name: 'Multi-Crop Systems',
+      plantType: ['lettuce', 'tomato'],  // mixed crops — array means multi-plant scenario
+      intro: {
+        title: 'Scenario 4: Multi-Crop Systems',
+        goal: 'Grow lettuce and tomatoes simultaneously in a shared system.',
+        desc: 'Real space greenhouses do not grow one crop at a time. This scenario gives you two grow channels. The first channel you place grows lettuce; the second grows tomatoes. Each crop has different light spectrum and nutrient needs, so plan your component layout carefully. Both channels can share a single water circuit.',
+        tips: [
+          'First grow channel placed = lettuce. Second = tomatoes.',
+          'Lettuce needs blue light and medium nutrients.',
+          'Tomatoes need red light, high nutrients, and a fan nearby.',
+          'Each channel needs its own LED panel positioned above it.',
+        ],
+      },
+      parts: {
+        reservoir: 1, pump: 2, channel: 2, led: 2,
+        nutrient: 3, fan: 1, sensor: 1,
+        pipe_straight: 10, pipe_elbow: 6, pipe_t: 4, pipe_cross: 2,
+      },
+    },
+    {
+      name: 'Long-Cycle Grain Production',
+      plantType: 'wheat',
+      intro: {
+        title: 'Scenario 5: Long-Cycle Grain Production',
+        goal: 'Sustain a wheat crop through its full 70-day growth cycle.',
+        desc: 'Leafy greens provide vitamins. Wheat provides calories. A complete wheat crop requires 70 days of sustained operation — far longer than any previous scenario — and passes through distinct stages: germination, tillering, stem elongation, heading, and grain-fill. Full-spectrum (purple) LED lighting supports all of these stages. Plan your nutrient injector count carefully before starting: each injector has a limited supply.',
+        tips: [
+          'Wheat requires purple (full-spectrum) LED lighting.',
+          'Medium nutrient concentration works best. Each injector lasts about 15 days.',
+          'A fan helps strengthen wheat stems, though it is not as critical as with tomatoes.',
+          'The pH sensor helps you monitor nutrient levels over the long cycle.',
+        ],
+      },
+      parts: {
+        reservoir: 1, pump: 1, channel: 2, led: 2,
+        nutrient: 5, fan: 1, sensor: 1,
+        pipe_straight: 12, pipe_elbow: 8, pipe_t: 4, pipe_cross: 2,
+      },
+    },
+  ];
+
+  // Place a new component from the bin (decrements bin count)
+  function placeComponent(type, col, row) {
+    const def  = COMP_DEFS[type];
+    const comp = {
+      type, col, row,
+      gridW: def.gridW,
+      gridH: def.gridH,
+      frame: def.idleFrame,
+      pipeType: def.pipeType || 0,
+      rotation: 0,
+      config: getDefaultConfig(type),
+    };
+
+    // Mixed-crop levels: assign plant type to each grow channel
+    if (type === 'channel') {
+      const level = LEVELS[currentLevel];
+      if (Array.isArray(level.plantType)) {
+        const placedChannels = placedComponents.filter(c => c.type === 'channel').length;
+        comp.plantType = level.plantType[Math.min(placedChannels, level.plantType.length - 1)];
+      }
+    }
+
+    stampToGrid(comp);
+    placedComponents.push(comp);
+    binCounts[type]--;
+    updateBinDisplay();
+    return comp;
+  }
+
+  // Write a component into gridState cells
+  function stampToGrid(comp) {
+    for (let r = 0; r < comp.gridH; r++) {
+      for (let c = 0; c < comp.gridW; c++) {
+        gridState[comp.row + r][comp.col + c] = comp;
+      }
+    }
+  }
+
+  // Clear a component from gridState cells (does NOT touch binCounts)
+  function clearFromGrid(comp) {
+    for (let r = 0; r < comp.gridH; r++) {
+      for (let c = 0; c < comp.gridW; c++) {
+        gridState[comp.row + r][comp.col + c] = null;
+      }
+    }
+    const idx = placedComponents.indexOf(comp);
+    if (idx !== -1) placedComponents.splice(idx, 1);
+    if (selectedComponent === comp) selectedComponent = null;
+  }
+
+  // Remove a component and return it to the bin (increments bin count)
+  function removeComponent(comp) {
+    clearFromGrid(comp);
+    binCounts[comp.type]++;
+    updateBinDisplay();
+  }
+
+  function deleteSelected() {
+    if (gameMode === 'simulating') return;
+    if (selectedComponent) removeComponent(selectedComponent);
+  }
+
+  function clearAllComponents() {
+    if (gameMode === 'simulating') return;
+    while (placedComponents.length > 0) {
+      removeComponent(placedComponents[0]);
+    }
+  }
+
+  document.getElementById('clear-all-btn').addEventListener('click', clearAllComponents);
+
+  // ── Save / Load progress ────────────────────────────────────
+  const SAVE_KEY = 'hydroponicSystemsLab_progress';
+
+  function loadProgress() {
+    try {
+      return JSON.parse(localStorage.getItem(SAVE_KEY)) || { unlocked: 5, completed: {} };
+    } catch { return { unlocked: 5, completed: {} }; }
+  }
+
+  function saveProgress(progress) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(progress)); } catch {}
+  }
+
+  // ── Level loader ─────────────────────────────────────────────
+  function loadLevel(index, showIntro = true) {
+    if (index < 0 || index >= LEVELS.length) return;
+    if (gameMode === 'simulating') return;
+
+    currentLevel = index;
+    const level = LEVELS[index];
+
+    // Set plant type (mixed crops handled separately in placeComponent)
+    currentPlantType = Array.isArray(level.plantType) ? level.plantType[0] : level.plantType;
+
+    // Update title bar
+    const plantName = Array.isArray(level.plantType)
+      ? level.plantType.map(p => PLANT_DEFS[p].name).join(' & ')
+      : PLANT_DEFS[level.plantType].name;
+    document.getElementById('level-name').innerHTML =
+      `Scenario ${index + 1}: ${level.name}<span id="plant-name" style="color:#5aca6a">${plantName}</span>`;
+
+    // Reset bin counts from level definition
+    for (const type of Object.keys(COMP_DEFS)) {
+      binCounts[type] = level.parts[type] ?? 0;
+    }
+
+    // Clear the workspace
+    clearAllComponents();
+    updateBinDisplay();
+    updateInfoPanel();
+
+    // Show intro modal
+    if (showIntro) showLevelIntro(level);
+  }
+
+  // ── Drag & Drop ──────────────────────────────────────────────
+  const dragGhost   = document.getElementById('drag-ghost');
+  const dgCtx       = dragGhost.getContext('2d');
+  const workspaceEl = document.getElementById('workspace');
+
+  let dragging     = null;   // { type, gridW, gridH, frame }
+  let dragSourceEl = null;
+  // Last valid snap position — used for placement on mouseup
+  let lastSnapCol   = -1;
+  let lastSnapRow   = -1;
+  let lastSnapValid = false;
+
+  // Get mouse position in 960×640 logical space
+  function getGamePos(e) {
+    const root  = document.getElementById('scale-root');
+    const rect  = root.getBoundingClientRect();
+    const scale = rect.width / 960;
+    return {
+      x: (e.clientX - rect.left) / scale,
+      y: (e.clientY - rect.top)  / scale,
+    };
+  }
+
+  // Get mouse position relative to workspace canvas (720×504)
+  function getCanvasPos(e) {
+    const gp     = getGamePos(e);
+    const root   = document.getElementById('scale-root');
+    const rRect  = root.getBoundingClientRect();
+    const scale  = rRect.width / 960;
+    const wsRect = workspaceEl.getBoundingClientRect();
+    return {
+      x: gp.x - (wsRect.left - rRect.left) / scale,
+      y: gp.y - (wsRect.top  - rRect.top)  / scale,
+    };
+  }
+
+  // Workspace offset in logical pixels (for positioning ghost)
+  function getWsOffset() {
+    const root   = document.getElementById('scale-root');
+    const rRect  = root.getBoundingClientRect();
+    const scale  = rRect.width / 960;
+    const wsRect = workspaceEl.getBoundingClientRect();
+    return {
+      x: (wsRect.left - rRect.left) / scale,
+      y: (wsRect.top  - rRect.top)  / scale,
+    };
+  }
+
+  // Start drag — works for both .part-item and .pipe-slot
+  function startDrag(el, type, e) {
+    e.preventDefault();
+    if (gameMode === 'simulating') return;
+    if (binCounts[type] <= 0) return;
+
+    const def = COMP_DEFS[type];
+    dragging = {
+      type,
+      gridW: def.gridW,
+      gridH: def.gridH,
+      frame: def.idleFrame,
+    };
+    dragSourceEl = el;
+    el.classList.add('dragging');
+
+    lastSnapCol   = -1;
+    lastSnapRow   = -1;
+    lastSnapValid = false;
+
+    // Draw ghost
+    const gw = def.gridW * GRID.cell;
+    const gh = def.gridH * GRID.cell;
+    dragGhost.width  = gw;
+    dragGhost.height = gh;
+    dgCtx.imageSmoothingEnabled = false;
+    dgCtx.clearRect(0, 0, gw, gh);
+    drawSprite(dgCtx, dragging.frame, 0, 0, 0, 2);
+
+    dragGhost.style.display = 'block';
+    dragGhost.style.width   = gw + 'px';
+    dragGhost.style.height  = gh + 'px';
+    document.getElementById('game').classList.add('dragging');
+
+    const gp = getGamePos(e);
+    dragGhost.style.left = (gp.x - gw / 2) + 'px';
+    dragGhost.style.top  = (gp.y - gh / 2) + 'px';
+
+    selectedComponent = null;
+  }
+
+  // Bind drag to part items
+  document.querySelectorAll('.part-item[data-type]').forEach(el => {
+    el.addEventListener('mousedown', e => startDrag(el, el.dataset.type, e));
+  });
+
+  // Bind drag to pipe slots
+  document.querySelectorAll('.pipe-slot[data-type]').forEach(el => {
+    el.addEventListener('mousedown', e => startDrag(el, el.dataset.type, e));
+  });
+
+  // Mouse move: snap ghost to grid
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+
+    const gp = getGamePos(e);
+    const cp = getCanvasPos(e);
+    const gw = dragging.gridW * GRID.cell;
+    const gh = dragging.gridH * GRID.cell;
+
+    const grid = pxToGrid(cp.x, cp.y);
+    const overGrid = grid.col >= 0 && grid.col + dragging.gridW <= GRID.cols &&
+                     grid.row >= 0 && grid.row + dragging.gridH <= GRID.rows;
+
+    if (overGrid) {
+      const snapX = GRID.originX + grid.col * GRID.cell;
+      const snapY = GRID.originY + grid.row * GRID.cell;
+      const wsOff = getWsOffset();
+      dragGhost.style.left = (wsOff.x + snapX) + 'px';
+      dragGhost.style.top  = (wsOff.y + snapY) + 'px';
+
+      const valid = canPlace(grid.col, grid.row, dragging.gridW, dragging.gridH);
+      dragGhost.style.opacity = valid ? '0.85' : '0.35';
+
+      // Save snap position for mouseup
+      lastSnapCol   = grid.col;
+      lastSnapRow   = grid.row;
+      lastSnapValid = valid;
+    } else {
+      dragGhost.style.left = (gp.x - gw / 2) + 'px';
+      dragGhost.style.top  = (gp.y - gh / 2) + 'px';
+      dragGhost.style.opacity = '0.5';
+
+      lastSnapCol   = -1;
+      lastSnapRow   = -1;
+      lastSnapValid = false;
+    }
+  });
+
+  // Mouse up: place using the last snapped position
+  document.addEventListener('mouseup', e => {
+    if (!dragging) return;
+
+    if (lastSnapValid && lastSnapCol >= 0 && lastSnapRow >= 0) {
+      if (dragging.fromGrid) {
+        // Repositioning: re-stamp without touching bin count
+        const comp = dragging.originalComp;
+        comp.col = lastSnapCol;
+        comp.row = lastSnapRow;
+        stampToGrid(comp);
+        placedComponents.push(comp);
+      } else {
+        // New from bin
+        placeComponent(dragging.type, lastSnapCol, lastSnapRow);
+      }
+    } else if (dragging.fromGrid) {
+      // Dropped off-grid — return to bin
+      binCounts[dragging.type]++;
+      updateBinDisplay();
+    }
+    // else: dropped off-grid from bin — nothing happens, count wasn't changed
+
+    // Clean up
+    dragGhost.style.display = 'none';
+    document.getElementById('game').classList.remove('dragging');
+    if (dragSourceEl) dragSourceEl.classList.remove('dragging');
+    dragging      = null;
+    dragSourceEl  = null;
+    lastSnapCol   = -1;
+    lastSnapRow   = -1;
+    lastSnapValid = false;
+  });
+
+  // ── Click / drag on workspace: select, rotate, reposition ────
+  const gameCanvas = document.getElementById('game-canvas');
+  let gridMouseDown  = null;  // track mousedown position to distinguish click vs drag
+
+  gameCanvas.addEventListener('mousedown', e => {
+    if (dragging) return;
+    if (gameMode === 'simulating') return;
+
+    const cp   = getCanvasPos(e);
+    const grid = pxToGrid(cp.x, cp.y);
+    if (grid.col < 0 || grid.col >= GRID.cols || grid.row < 0 || grid.row >= GRID.rows) {
+      selectedComponent = null;
+      return;
+    }
+
+    const comp = gridState[grid.row][grid.col];
+    if (!comp) {
+      selectedComponent = null;
+      return;
+    }
+
+    selectedComponent = comp;
+    gridMouseDown = { comp, startX: e.clientX, startY: e.clientY, moved: false, longPressed: false };
+
+    // Long-press detection for config popover (LED, nutrient)
+    if (comp.type === 'led' || comp.type === 'nutrient') {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        if (gridMouseDown && !gridMouseDown.moved) {
+          gridMouseDown.longPressed = true;
+          const canvasX = GRID.originX + comp.col * GRID.cell;
+          const canvasY = GRID.originY + comp.row * GRID.cell;
+          openConfigPopover(comp, canvasX, canvasY);
+        }
+        longPressTimer = null;
+      }, 400);
+    }
+  });
+
+  // Right-click to remove placed component
+  gameCanvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (gameMode === 'simulating') return;
+    const cp   = getCanvasPos(e);
+    const grid = pxToGrid(cp.x, cp.y);
+    if (grid.col < 0 || grid.col >= GRID.cols || grid.row < 0 || grid.row >= GRID.rows) return;
+    const comp = gridState[grid.row][grid.col];
+    if (comp) removeComponent(comp);
+  });
+
+  // Detect drag threshold (5px) to start repositioning
+  document.addEventListener('mousemove', e => {
+    if (!gridMouseDown || gridMouseDown.moved) return;
+
+    const dx = e.clientX - gridMouseDown.startX;
+    const dy = e.clientY - gridMouseDown.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 5) {
+      gridMouseDown.moved = true;
+      // Cancel long-press timer if dragging
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      const comp = gridMouseDown.comp;
+
+      // Pick up from grid — clear cells but do NOT adjust bin count
+      clearFromGrid(comp);
+
+      const def = COMP_DEFS[comp.type];
+      dragging = {
+        type: comp.type,
+        gridW: def.gridW,
+        gridH: def.gridH,
+        frame: comp.frame,
+        fromGrid: true,
+        originalComp: comp,  // keep the object to preserve rotation etc.
+      };
+      dragSourceEl = null;
+
+      lastSnapCol   = -1;
+      lastSnapRow   = -1;
+      lastSnapValid = false;
+
+      const gw = def.gridW * GRID.cell;
+      const gh = def.gridH * GRID.cell;
+      dragGhost.width  = gw;
+      dragGhost.height = gh;
+      dgCtx.imageSmoothingEnabled = false;
+      dgCtx.clearRect(0, 0, gw, gh);
+      drawSprite(dgCtx, comp.frame, 0, 0, comp.rotation, 2);
+
+      dragGhost.style.display = 'block';
+      dragGhost.style.width   = gw + 'px';
+      dragGhost.style.height  = gh + 'px';
+      document.getElementById('game').classList.add('dragging');
+
+      const gp = getGamePos(e);
+      dragGhost.style.left = (gp.x - gw / 2) + 'px';
+      dragGhost.style.top  = (gp.y - gh / 2) + 'px';
+    }
+  });
+
+  // On mouseup without drag = click (rotate any rotatable component)
+  document.addEventListener('mouseup', e => {
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    if (gridMouseDown && !gridMouseDown.moved && !gridMouseDown.longPressed && gameMode === 'building') {
+      const comp = gridMouseDown.comp;
+      const def  = COMP_DEFS[comp.type];
+      if (def.rotations > 1) {
+        comp.rotation = (comp.rotation + 1) % def.rotations;
+      }
+    }
+    gridMouseDown = null;
+  });
+
+  // ── Viewport scaling ──────────────────────────────────────────
+  function scaleGame() {
+    const root   = document.getElementById('scale-root');
+    const scaleX = window.innerWidth  / 960;
+    const scaleY = window.innerHeight / 640;
+    const fit    = Math.min(scaleX, scaleY);
+    const scale  = fit >= 1 ? Math.floor(fit) : fit;
+    root.style.transform = `scale(${scale})`;
+  }
+
+  scaleGame();
+  window.addEventListener('resize', scaleGame);
+
+  // ── Power button toggle ───────────────────────────────────────
+  document.getElementById('power-btn').addEventListener('click', function() {
+    if (gameMode === 'building') {
+      // Block sim if no grow channels placed
+      if (!placedComponents.some(c => c.type === 'channel')) {
+        const el = document.getElementById('info-text');
+        el.textContent = 'No grow channels placed — there are no plants to grow!';
+        el.style.color = '#ef4444';
+        infoPanelLocked = true;
+        setTimeout(() => { el.style.color = ''; infoPanelLocked = false; updateInfoPanel(); }, 3000);
+        return;
+      }
+      gameMode = 'simulating';
+      this.classList.add('on');
+      selectedComponent = null;
+      startSim();
+    } else {
+      const snap = snapshotResults();
+      gameMode = 'building';
+      this.classList.remove('on');
+      stopSim();
+      showLevelEndModal('stopped', snap);
+    }
+  });
+
+  // ── Custom tooltips (status bar only) ─────────────────────────
+  const tooltipEl = document.createElement('div');
+  tooltipEl.className = 'game-tooltip';
+  document.getElementById('game').appendChild(tooltipEl);
+  let tipTimeout = null;
+
+  document.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mouseenter', e => {
+      const tip = el.getAttribute('data-tip');
+      if (!tip) return;
+      tooltipEl.textContent = tip;
+      // Position above the element
+      const root  = document.getElementById('scale-root');
+      const rRect = root.getBoundingClientRect();
+      const scale = rRect.width / 960;
+      const elRect = el.getBoundingClientRect();
+      const x = (elRect.left - rRect.left) / scale;
+      const y = (elRect.top - rRect.top) / scale - 28;
+      tooltipEl.style.left = x + 'px';
+      tooltipEl.style.top  = y + 'px';
+      tipTimeout = setTimeout(() => tooltipEl.classList.add('visible'), 100);
+    });
+    el.addEventListener('mouseleave', () => {
+      clearTimeout(tipTimeout);
+      tooltipEl.classList.remove('visible');
+    });
+  });
+
+  // ── Component config popover ──────────────────────────────────
+  const configPopover = document.getElementById('config-popover');
+  let configTarget    = null;  // component currently being configured
+  let longPressTimer  = null;
+
+  function openConfigPopover(comp, canvasX, canvasY) {
+    configTarget = comp;
+    const wsOff = getWsOffset();
+
+    // Build popover content based on component type
+    let html = '';
+    if (comp.type === 'led') {
+      html = '<div class="config-popover-title">LED Spectrum</div>';
+      const spectrums = [
+        { val: 'red',    color: '#da3a3a', label: 'Red' },
+        { val: 'blue',   color: '#3a8ada', label: 'Blue' },
+        { val: 'purple', color: '#9a3ada', label: 'Purple' },
+      ];
+      for (const s of spectrums) {
+        const sel = comp.config.spectrum === s.val ? ' selected' : '';
+        html += `<div class="config-option${sel}" data-val="${s.val}">` +
+                `<div class="config-swatch" style="background:${s.color}"></div>${s.label}</div>`;
+      }
+    } else if (comp.type === 'nutrient') {
+      html = '<div class="config-popover-title">Concentration</div>';
+      const levels = [
+        { val: 'low',    label: 'Low',    desc: '~25 days' },
+        { val: 'medium', label: 'Medium', desc: '~15 days' },
+        { val: 'high',   label: 'High',   desc: '~10 days' },
+      ];
+      for (const l of levels) {
+        const sel = comp.config.concentration === l.val ? ' selected' : '';
+        html += `<div class="config-option${sel}" data-val="${l.val}">` +
+                `${l.label} <span style="color:#4a6a8a;font-size:16px">(${l.desc})</span></div>`;
+      }
+    } else {
+      return; // no config for this type
+    }
+
+    configPopover.innerHTML = html;
+
+    // Position: near the component, but clamped within 960×640
+    let px = wsOff.x + canvasX + 36;  // offset right of the cell
+    let py = wsOff.y + canvasY - 10;  // slightly above
+
+    // Show temporarily to measure
+    configPopover.classList.add('visible');
+    const pw = configPopover.offsetWidth;
+    const ph = configPopover.offsetHeight;
+
+    // Clamp within game bounds
+    if (px + pw > 950) px = wsOff.x + canvasX - pw - 4;  // flip left
+    if (py + ph > 630) py = 630 - ph;
+    if (py < 10) py = 10;
+    if (px < 10) px = 10;
+
+    configPopover.style.left = px + 'px';
+    configPopover.style.top  = py + 'px';
+
+    // Bind option clicks
+    configPopover.querySelectorAll('.config-option').forEach(opt => {
+      opt.addEventListener('click', () => {
+        const val = opt.dataset.val;
+        if (comp.type === 'led') {
+          comp.config.spectrum = val;
+        } else if (comp.type === 'nutrient') {
+          comp.config.concentration = val;
+          // Reset supply when concentration changes (during building)
+          comp.config.supply = 1.0;
+        }
+        closeConfigPopover();
+      });
+    });
+  }
+
+  function closeConfigPopover() {
+    configPopover.classList.remove('visible');
+    configTarget = null;
+  }
+
+  // Close popover when clicking outside it
+  document.addEventListener('mousedown', e => {
+    if (configTarget && !configPopover.contains(e.target)) {
+      closeConfigPopover();
+    }
+  });
+
+  // ── Level end modal ──────────────────────────────────────────
+
+  // Snapshot plant data and system configuration before stopSim wipes it
+  function snapshotResults() {
+    const channels = placedComponents.filter(c => c.type === 'channel' && c.plants);
+    const allPlants = channels.flatMap(ch => ch.plants);
+    const avgGrowth = allPlants.length > 0
+      ? allPlants.reduce((s, p) => s + p.growth, 0) / allPlants.length : 0;
+    const avgHealth = allPlants.length > 0
+      ? allPlants.reduce((s, p) => s + p.health, 0) / allPlants.length : 0;
+
+    const activeLEDs = placedComponents.filter(c => c.type === 'led');
+    const spectrum = activeLEDs.length > 0 ? activeLEDs[0].config.spectrum : 'none';
+    let spectrumMatched = false;
+    if (channels.length > 0 && activeLEDs.length > 0) {
+      const plantType = getChannelPlantType(channels[0]);
+      const pref = PLANT_DEFS[plantType].lightPref;
+      spectrumMatched = (spectrum === pref) || (spectrum === 'purple');
+    }
+
+    const activeNuts = placedComponents.filter(c =>
+      c.type === 'nutrient' && c.config.supply > 0
+    );
+    const concentration = activeNuts.length > 0
+      ? activeNuts[0].config.concentration : 'none';
+    let nutrientMatched = false;
+    if (channels.length > 0 && activeNuts.length > 0) {
+      const plantType = getChannelPlantType(channels[0]);
+      const pref = PLANT_DEFS[plantType].nutrientPref;
+      nutrientMatched = (concentration === pref);
+    }
+
+    const fanPresent = placedComponents.some(c => c.type === 'fan');
+    const sensorPresent = placedComponents.some(c => c.type === 'sensor');
+
+    return {
+      avgGrowth, avgHealth, day: simTick,
+      spectrum, spectrumMatched,
+      concentration, nutrientMatched,
+      fanPresent, sensorPresent,
+    };
+  }
+
+  function getOutcomeGrade(snap) {
+    if (snap.avgGrowth >= 1.0 && snap.avgHealth >= 0.75) return 'OPTIMAL';
+    if (snap.avgGrowth >= 1.0)                            return 'FUNCTIONAL';
+    if (snap.avgGrowth >= 0.5)                            return 'PARTIAL';
+    return 'FAILED';
+  }
+
+  function showLevelEndModal(reason, snap) {
+    const { avgGrowth, avgHealth, day } = snap;
+    const modal      = document.getElementById('level-end-modal');
+    const titleEl    = document.getElementById('level-end-title');
+    const summaryEl  = document.getElementById('level-end-summary');
+    const statsEl    = document.getElementById('level-end-stats');
+    const nextBtn    = document.getElementById('btn-next');
+    const resultsBtn = document.getElementById('btn-results');
+
+    if (reason === 'matured') {
+      titleEl.textContent = 'Harvest Complete';
+      titleEl.style.color = '#3ada5a';
+    } else {
+      titleEl.textContent = 'Simulation Stopped';
+      titleEl.style.color = '#eab308';
+    }
+
+    let summary = '';
+    if (avgGrowth >= 1.0 && avgHealth >= 0.75) {
+      summary = 'Strong result. Optimal conditions maintained throughout the growth cycle.';
+    } else if (avgGrowth >= 1.0) {
+      summary = 'Crop reached maturity. Health was lower than ideal — check your light spectrum, nutrient concentration, and airflow settings.';
+    } else if (avgGrowth >= 0.5) {
+      summary = 'Partial growth. The crop did not reach maturity. Review your system design and try again.';
+    } else {
+      summary = 'Plants did not establish. Check that water is flowing, an LED panel is positioned above the grow channel, and all ports are connected.';
+    }
+    summaryEl.textContent = summary;
+    statsEl.textContent = `Growth: ${Math.floor(avgGrowth * 100)}%  |  Health: ${Math.floor(avgHealth * 100)}%  |  Days: ${day}`;
+
+    // Always save — stopping early still counts as "done" so testers can
+    // sweep through, but is graded STOPPED and flagged in the lab report.
+    saveScenarioComplete(currentLevel, snap, reason);
+
+    const progress = loadProgress();
+    const doneCount = Object.keys(progress.completed || {}).length;
+    const allDone = doneCount >= LEVELS.length;
+
+    if (allDone) {
+      nextBtn.style.display = 'none';
+      resultsBtn.style.display = 'inline-block';
+      resultsBtn.textContent = 'View Report';
+    } else {
+      nextBtn.style.display = 'inline-block';
+      resultsBtn.style.display = 'none';
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  function hideLevelEndModal() {
+    document.getElementById('level-end-modal').classList.add('hidden');
+  }
+
+  document.getElementById('btn-retry').addEventListener('click', () => {
+    hideLevelEndModal();
+  });
+
+  document.getElementById('btn-next').addEventListener('click', () => {
+    hideLevelEndModal();
+    const next = nextIncompleteScenario();
+    if (next !== null) loadLevel(next);
+  });
+
+  document.getElementById('btn-results').addEventListener('click', () => {
+    hideLevelEndModal();
+    showLabReport();
+  });
+
+  // Store the full snapshot per scenario, with grade and end reason.
+  // reason: 'matured' (ran to harvest) or 'stopped' (player hit power early).
+  // Both count as completed; STOPPED grade flags it as not a real finish.
+  function saveScenarioComplete(levelIdx, snap, reason) {
+    const progress = loadProgress();
+    progress.completed = progress.completed || {};
+    progress.completed[levelIdx] = {
+      endReason:       reason,
+      grade:           reason === 'stopped' ? 'STOPPED' : getOutcomeGrade(snap),
+      avgGrowth:       Math.floor(snap.avgGrowth * 100),
+      avgHealth:       Math.floor(snap.avgHealth * 100),
+      day:             snap.day,
+      spectrum:        snap.spectrum,
+      spectrumMatched: snap.spectrumMatched,
+      concentration:   snap.concentration,
+      nutrientMatched: snap.nutrientMatched,
+      fanPresent:      snap.fanPresent,
+      sensorPresent:   snap.sensorPresent,
+    };
+    saveProgress(progress);
+  }
+
+  function nextIncompleteScenario() {
+    const progress = loadProgress();
+    const done = progress.completed || {};
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (!done[i]) return i;
+    }
+    return null;
+  }
+
+  // ── Lab Report modal ───────────────────────────────────────────
+
+  const LEVEL_LESSONS = [
+    'A hydroponic circuit needs three connected elements: a reservoir, a pump, and a grow channel. Light from an LED panel above the channel drives photosynthesis.',
+    'Hydroponic systems deliver nutrients dissolved in water directly to plant roots. Concentration matters — too little starves the crop, too much causes root burn and pH drift.',
+    'In microgravity, warm air does not rise and cool air does not sink. Without a fan, CO₂ and humid air pool around leaves, causing mold and stunted growth.',
+    'Different crops have different light spectrum and nutrient requirements. A shared water circuit can serve both if each channel has the right LED and concentration settings.',
+    'Sustaining a crop over 70+ days requires planning nutrient supply across the full growth cycle. Wheat passes through distinct stages — germination, tillering, heading, grain-fill — each with different demands.',
+  ];
+
+  function buildObservations(levelIdx, data) {
+    const level = LEVELS[levelIdx];
+    const plantType = Array.isArray(level.plantType) ? level.plantType[0] : level.plantType;
+    const plantDef = PLANT_DEFS[plantType];
+    const obs = [];
+
+    if (data.spectrum === 'none') {
+      obs.push({ text: 'No LED panel detected. Plants had no light source.', type: 'warn' });
+    } else if (data.spectrumMatched) {
+      obs.push({ text: `Light spectrum matched: ${data.spectrum}. Optimal growth multiplier applied.`, type: 'good' });
+    } else {
+      obs.push({ text: `Light spectrum was ${data.spectrum}. ${plantDef.name} prefers ${plantDef.lightPref} — growth was reduced.`, type: 'warn' });
+    }
+
+    if (data.concentration === 'none') {
+      obs.push({ text: 'No nutrient injector active. Plants relied on base water nutrition only.', type: 'warn' });
+    } else if (data.nutrientMatched) {
+      obs.push({ text: `Nutrient concentration matched: ${data.concentration}. Optimal nutrient uptake.`, type: 'good' });
+    } else {
+      obs.push({ text: `Concentration was ${data.concentration}. ${plantDef.name} prefers ${plantDef.nutrientPref}.`, type: 'warn' });
+    }
+
+    if (plantDef.needsAirflow && !data.fanPresent) {
+      obs.push({ text: `${plantDef.name} requires active airflow in microgravity. No fan detected — health was significantly penalized.`, type: 'warn' });
+    } else if (data.fanPresent) {
+      obs.push({ text: 'Fan detected. Air circulation maintained around the grow channel.', type: 'good' });
+    }
+
+    if (!data.sensorPresent) {
+      obs.push({ text: 'No pH sensor placed. Nutrient and pH readings were unavailable during the run.', type: null });
+    }
+
+    return obs;
+  }
+
+  let reportSelectedIdx = 0;
+
+  function showLabReport() {
+    const progress = loadProgress();
+    const completed = progress.completed || {};
+
+    const listEl = document.getElementById('report-list');
+    listEl.innerHTML = '';
+
+    for (let i = 0; i < LEVELS.length; i++) {
+      const row = document.createElement('div');
+      row.className = 'report-row' + (i === reportSelectedIdx ? ' selected' : '');
+      row.dataset.idx = i;
+
+      const numEl = document.createElement('span');
+      numEl.className = 'report-row-num';
+      numEl.textContent = i + 1;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'report-row-name';
+      nameEl.textContent = LEVELS[i].name;
+
+      const gradeEl = document.createElement('span');
+      const data = completed[i];
+      const grade = (data && data.grade) ? data.grade : 'INCOMPLETE';
+      gradeEl.className = `report-grade grade-${grade}`;
+      gradeEl.textContent = grade;
+
+      row.appendChild(numEl);
+      row.appendChild(nameEl);
+      row.appendChild(gradeEl);
+
+      row.addEventListener('click', () => {
+        reportSelectedIdx = i;
+        document.querySelectorAll('.report-row').forEach(r => r.classList.remove('selected'));
+        row.classList.add('selected');
+        renderReportDetail(i, completed[i] || null);
+      });
+
+      listEl.appendChild(row);
+    }
+
+    renderReportDetail(reportSelectedIdx, completed[reportSelectedIdx] || null);
+
+    document.getElementById('complete-modal').classList.remove('hidden');
+  }
+
+  function renderReportDetail(levelIdx, data) {
+    const detailEl = document.getElementById('report-detail');
+    detailEl.innerHTML = '';
+
+    const nameEl = document.createElement('div');
+    nameEl.id = 'report-detail-name';
+    nameEl.textContent = `Scenario ${levelIdx + 1}: ${LEVELS[levelIdx].name}`;
+    detailEl.appendChild(nameEl);
+
+    // Treat null/undefined OR legacy boolean-true records as not run
+    if (!data || !data.grade) {
+      const empty = document.createElement('div');
+      empty.className = 'report-empty';
+      empty.textContent = 'This scenario has not been completed yet.';
+      detailEl.appendChild(empty);
+      return;
+    }
+
+    // Stopped-early callout
+    if (data.endReason === 'stopped') {
+      const banner = document.createElement('div');
+      banner.className = 'report-stopped-banner';
+      banner.innerHTML =
+        `<strong>⚠ STOPPED EARLY</strong> — Simulation ended on Day ${data.day} ` +
+        `before the crop reached maturity. Run this scenario to completion ` +
+        `for a real result.`;
+      detailEl.appendChild(banner);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'report-stat-grid';
+
+    const stats = [
+      {
+        label: 'OUTCOME',
+        value: data.grade,
+        cls: data.grade === 'OPTIMAL' ? 'good' : data.grade === 'FUNCTIONAL' ? '' : 'warn',
+      },
+      { label: 'DAYS',   value: data.day,            cls: '' },
+      { label: 'GROWTH', value: data.avgGrowth + '%', cls: data.avgGrowth >= 100 ? 'good' : data.avgGrowth >= 50 ? '' : 'warn' },
+      { label: 'HEALTH', value: data.avgHealth + '%', cls: data.avgHealth >= 75 ? 'good' : data.avgHealth >= 50 ? '' : 'warn' },
+    ];
+
+    for (const s of stats) {
+      const cell = document.createElement('div');
+      cell.className = 'report-stat';
+      cell.innerHTML = `
+        <div class="report-stat-label">${s.label}</div>
+        <div class="report-stat-value ${s.cls}">${s.value}</div>
+      `;
+      grid.appendChild(cell);
+    }
+    detailEl.appendChild(grid);
+
+    const obs = buildObservations(levelIdx, data);
+    if (obs.length > 0) {
+      const obsSection = document.createElement('div');
+      obsSection.className = 'report-observations';
+
+      const obsLabel = document.createElement('div');
+      obsLabel.className = 'report-obs-label';
+      obsLabel.textContent = 'SYSTEM OBSERVATIONS';
+      obsSection.appendChild(obsLabel);
+
+      for (const o of obs) {
+        const item = document.createElement('div');
+        item.className = 'report-obs-item' + (o.type ? ` obs-${o.type}` : '');
+        item.textContent = o.text;
+        obsSection.appendChild(item);
+      }
+      detailEl.appendChild(obsSection);
+    }
+
+    const lesson = document.createElement('div');
+    lesson.className = 'report-detail-lesson';
+    lesson.textContent = LEVEL_LESSONS[levelIdx];
+    detailEl.appendChild(lesson);
+  }
+
+  document.getElementById('btn-complete-close').addEventListener('click', () => {
+    document.getElementById('complete-modal').classList.add('hidden');
+  });
+
+  // ── Level intro modal ──────────────────────────────────────────
+
+  function showLevelIntro(level) {
+    document.getElementById('intro-title').textContent = level.intro.title;
+    document.getElementById('intro-goal').textContent = level.intro.goal;
+    document.getElementById('intro-desc').textContent = level.intro.desc;
+    const tipsList = document.getElementById('intro-tips');
+    tipsList.innerHTML = '';
+    for (const tip of level.intro.tips) {
+      const li = document.createElement('li');
+      li.textContent = tip;
+      tipsList.appendChild(li);
+    }
+    document.getElementById('intro-modal').classList.remove('hidden');
+  }
+
+  document.getElementById('intro-start').addEventListener('click', () => {
+    document.getElementById('intro-modal').classList.add('hidden');
+    HSL_Tutorial.onIntroModalClosed();
+  });
+
+  // ── Level select dropdown ────────────────────────────────────
+
+  const levelSelectEl = document.getElementById('level-select');
+  let levelSelectOpen = false;
+
+  function buildLevelSelect() {
+    const progress = loadProgress();
+    levelSelectEl.innerHTML = '';
+
+    for (let i = 0; i < LEVELS.length; i++) {
+      const level = LEVELS[i];
+      const isCurrent = i === currentLevel;
+
+      const opt = document.createElement('div');
+      opt.className = 'level-option' + (isCurrent ? ' current' : '');
+
+      const numEl = document.createElement('span');
+      numEl.className = 'level-option-num';
+      numEl.textContent = i + 1;
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'level-option-name';
+      nameEl.textContent = level.name;
+
+      opt.appendChild(numEl);
+      opt.appendChild(nameEl);
+
+      if (progress.completed && progress.completed[i]) {
+        const doneEl = document.createElement('span');
+        doneEl.style.cssText = 'color:#4ade80; font-size:16px; font-family:VT323,monospace;';
+        doneEl.textContent = '\u2713 DONE';
+        opt.appendChild(doneEl);
+      }
+
+      opt.addEventListener('click', () => {
+        closeLevelSelect();
+        if (i !== currentLevel) loadLevel(i);
+      });
+
+      levelSelectEl.appendChild(opt);
+    }
+  }
+
+  function toggleLevelSelect() {
+    if (gameMode === 'simulating') return;
+    levelSelectOpen = !levelSelectOpen;
+    if (levelSelectOpen) {
+      buildLevelSelect();
+      levelSelectEl.style.display = 'block';
+    } else {
+      levelSelectEl.style.display = 'none';
+    }
+  }
+
+  function closeLevelSelect() {
+    levelSelectOpen = false;
+    levelSelectEl.style.display = 'none';
+  }
+
+  document.getElementById('level-name').addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleLevelSelect();
+  });
+
+  // Close dropdown when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if (levelSelectOpen && !levelSelectEl.contains(e.target)) {
+      closeLevelSelect();
+    }
+  });
+
+  // ── Star field ────────────────────────────────────────────────
+  const starCanvas = document.getElementById('star-canvas');
+  const sCtx       = starCanvas.getContext('2d');
+  const SW = 100, SH = 75;
+
+  const STAR_LAYERS = [
+    { count: 25, speed: 0.12, minSize: 1, maxSize: 1, minAlpha: 0.3, maxAlpha: 0.55 },
+    { count: 15, speed: 0.28, minSize: 1, maxSize: 1, minAlpha: 0.5, maxAlpha: 0.75 },
+    { count:  8, speed: 0.55, minSize: 1, maxSize: 2, minAlpha: 0.7, maxAlpha: 1.00 },
+  ];
+
+  const stars = [];
+  STAR_LAYERS.forEach(layer => {
+    for (let i = 0; i < layer.count; i++) {
+      stars.push({
+        x:     Math.random() * SW,
+        y:     Math.random() * SH,
+        size:  layer.minSize + Math.random() * (layer.maxSize - layer.minSize),
+        speed: layer.speed,
+        alpha: layer.minAlpha + Math.random() * (layer.maxAlpha - layer.minAlpha),
+      });
+    }
+  });
+
+  function tickStars() {
+    sCtx.clearRect(0, 0, SW, SH);
+    sCtx.fillStyle = '#03050f';
+    sCtx.fillRect(0, 0, SW, SH);
+    stars.forEach(s => {
+      s.x -= s.speed;
+      if (s.x < 0) { s.x = SW; s.y = Math.random() * SH; }
+      sCtx.globalAlpha = s.alpha;
+      sCtx.fillStyle   = '#c8e0ff';
+      sCtx.fillRect(Math.round(s.x), Math.round(s.y), s.size, s.size);
+    });
+    sCtx.globalAlpha = 1;
+  }
+
+  // ── Game canvas rendering ─────────────────────────────────────
+  const gCtx = gameCanvas.getContext('2d');
+  gCtx.imageSmoothingEnabled = false;
+
+  function drawDebugGrid() {
+    if (!SHOW_DEBUG_GRID) return;
+    gCtx.strokeStyle = 'rgba(255, 40, 40, 0.6)';
+    gCtx.lineWidth   = 1;
+    const { originX, originY, cols, rows, cell } = GRID;
+
+    for (let c = 0; c <= cols; c++) {
+      const x = originX + c * cell;
+      gCtx.beginPath();
+      gCtx.moveTo(x + 0.5, originY);
+      gCtx.lineTo(x + 0.5, originY + rows * cell);
+      gCtx.stroke();
+    }
+    for (let r = 0; r <= rows; r++) {
+      const y = originY + r * cell;
+      gCtx.beginPath();
+      gCtx.moveTo(originX,              y + 0.5);
+      gCtx.lineTo(originX + cols * cell, y + 0.5);
+      gCtx.stroke();
+    }
+
+    gCtx.fillStyle = '#06b6d4';
+    [[originX, originY], [originX + cols*cell, originY],
+     [originX, originY + rows*cell], [originX + cols*cell, originY + rows*cell]]
+      .forEach(([x,y]) => gCtx.fillRect(x-2, y-2, 4, 4));
+  }
+
+  function drawComponents() {
+    placedComponents.forEach(comp => {
+      const px = GRID.originX + comp.col * GRID.cell;
+      const py = GRID.originY + comp.row * GRID.cell;
+
+      drawSprite(gCtx, comp.frame, px, py, comp.rotation, 2);
+
+      // Nutrient supply screen overlay
+      if (comp.type === 'nutrient' && comp.config) {
+        const color = gameMode === 'simulating'
+          ? getNutrientScreenColor(comp.config.supply)
+          : '#22c55e';  // green when building (full supply)
+        drawScreenOverlay(comp, color);
+      }
+
+    });
+  }
+
+  // ── Flow animation (marching dashes through pipes) ──────────
+
+  let flowDashOffset = 0;
+
+  // ── Flow animation (marching dashes through pipes) ──────────
+  // Port edge midpoints in local 64×64 coords (before rotation)
+  const PORT_EDGE = { left: [0, 32], right: [64, 32], top: [32, 0], bottom: [32, 64] };
+  const CENTER = [32, 32];
+
+  // Simple paths for straight and elbow (entry→exit only, no ambiguity)
+  const FLOW_PATHS_SIMPLE = {
+    pipe_straight: { ports: ['left', 'right'], via: null },   // ─ straight through
+    pipe_elbow:    { ports: ['bottom', 'right'], via: null },  // ┘ corner via center
+  };
+
+  function rotatePoint(x, y, rot) {
+    const cx = 32, cy = 32;
+    let rx = x - cx, ry = y - cy;
+    for (let i = 0; i < rot; i++) {
+      const tmp = rx;
+      rx = -ry;
+      ry = tmp;
+    }
+    return [rx + cx, ry + cy];
+  }
+
+  const PORT_ROT = { top: 'right', right: 'bottom', bottom: 'left', left: 'top' };
+  function rotatePortName(port, rot) {
+    let p = port;
+    for (let i = 0; i < rot; i++) p = PORT_ROT[p];
+    return p;
+  }
+
+  // Check if a port on this pipe has a flowing neighbor connected to it
+  function isPortConnectedToFlow(comp, port) {
+    const [dr, dc] = DIR_OFFSET[port];
+    const nr = comp.row + dr, nc = comp.col + dc;
+    if (nr < 0 || nr >= GRID.rows || nc < 0 || nc >= GRID.cols) return false;
+    const neighbor = gridState[nr][nc];
+    if (!neighbor || !flowSet.has(neighbor)) return false;
+    // Check neighbor has a matching port on the shared edge
+    return getPortsAtCell(nr, nc).includes(OPPOSITE[port]);
+  }
+
+  function drawFlowAnimation() {
+    if (gameMode !== 'simulating') return;
+
+    const dashLen = 16;
+
+    gCtx.save();
+    gCtx.strokeStyle = 'rgba(180, 255, 255, 0.6)';
+    gCtx.lineWidth = 4;
+    gCtx.lineCap = 'round';
+    gCtx.setLineDash([6, 10]);
+
+    for (const comp of placedComponents) {
+      if (!comp.pipeType || !flowSet.has(comp)) continue;
+
+      const px = GRID.originX + comp.col * GRID.cell;
+      const py = GRID.originY + comp.row * GRID.cell;
+      const entryPort = flowDir.get(comp);
+
+      if (comp.type === 'pipe_straight' || comp.type === 'pipe_elbow') {
+        // Simple 2-port pipes: one path from port A to port B
+        const def = FLOW_PATHS_SIMPLE[comp.type];
+        const portA = rotatePortName(def.ports[0], comp.rotation);
+        const portB = rotatePortName(def.ports[1], comp.rotation);
+
+        // Build points: edge A → (center for elbow) → edge B
+        const ptA = rotatePoint(PORT_EDGE[def.ports[0]][0], PORT_EDGE[def.ports[0]][1], comp.rotation);
+        const ptB = rotatePoint(PORT_EDGE[def.ports[1]][0], PORT_EDGE[def.ports[1]][1], comp.rotation);
+        const ctr = [32, 32]; // center doesn't move with rotation
+
+        let drawPts;
+        if (comp.type === 'pipe_elbow') {
+          drawPts = [[px + ptA[0], py + ptA[1]], [px + ctr[0], py + ctr[1]], [px + ptB[0], py + ptB[1]]];
+        } else {
+          drawPts = [[px + ptA[0], py + ptA[1]], [px + ptB[0], py + ptB[1]]];
+        }
+
+        // Reverse if water enters from port B side
+        if (entryPort === portB) drawPts.reverse();
+
+        gCtx.lineDashOffset = -flowDashOffset;
+        gCtx.beginPath();
+        gCtx.moveTo(drawPts[0][0], drawPts[0][1]);
+        for (let i = 1; i < drawPts.length; i++) gCtx.lineTo(drawPts[i][0], drawPts[i][1]);
+        gCtx.stroke();
+
+      } else {
+        // T-joint and cross: draw a line from entry port through center to each
+        // connected exit port. Only arms with flowing neighbors get animated.
+        const basePorts = comp.type === 'pipe_t'
+          ? ['left', 'top', 'right']
+          : ['top', 'right', 'bottom', 'left'];
+
+        // Get all rotated ports and find which are connected to flow
+        const connectedPorts = [];
+        for (const bp of basePorts) {
+          const rp = rotatePortName(bp, comp.rotation);
+          if (rp === entryPort || isPortConnectedToFlow(comp, rp)) {
+            connectedPorts.push({ base: bp, rotated: rp });
+          }
+        }
+
+        // Draw entry → center → each exit arm
+        for (const cp of connectedPorts) {
+          if (cp.rotated === entryPort) continue; // don't draw entry-only arm separately
+
+          const entryBase = basePorts.find(bp => rotatePortName(bp, comp.rotation) === entryPort);
+          const ptEntry = entryBase
+            ? rotatePoint(PORT_EDGE[entryBase][0], PORT_EDGE[entryBase][1], comp.rotation)
+            : [32, 32];
+          const ptExit = rotatePoint(PORT_EDGE[cp.base][0], PORT_EDGE[cp.base][1], comp.rotation);
+
+          gCtx.lineDashOffset = -flowDashOffset;
+          gCtx.beginPath();
+          gCtx.moveTo(px + ptEntry[0], py + ptEntry[1]);
+          gCtx.lineTo(px + 32, py + 32); // center
+          gCtx.lineTo(px + ptExit[0], py + ptExit[1]);
+          gCtx.stroke();
+        }
+      }
+    }
+
+    gCtx.restore();
+    flowDashOffset = (flowDashOffset + 0.8) % dashLen;
+  }
+
+  // ── Main loop ────────────────────────────────────────────────
+  let frameCount = 0;
+  function loop() {
+    // Drive sprite animation frame from render loop (~2 swaps/sec at 60fps)
+    animFrame = Math.floor(frameCount / 30) % 2;
+    updateComponentSprites();
+
+    tickStars();
+    gCtx.clearRect(0, 0, 720, 504);
+    drawComponents();
+    drawFlowAnimation();
+    // Plants drawn on top of everything (including LED sprites)
+    if (gameMode === 'simulating') drawPlants();
+    // Connection dots only in building mode (sim uses filled/empty pipe sprites)
+    if (gameMode === 'building') drawConnectionDots();
+    drawDebugGrid();
+
+    // Bump every frame so animFrame keeps toggling during simulation.
+    // Info panel only refreshes in building mode.
+    frameCount++;
+    if (gameMode === 'building' && frameCount % 30 === 0) updateInfoPanel();
+
+    requestAnimationFrame(loop);
+  }
+
+  // Load level 1 on startup (with intro modal)
+  loadLevel(0);
+  loop();
+
+  // ── Help & Field Guide modals ────────────────────────────────
+
+  let simPausedByModal = false;
+
+  function pauseSimForModal() {
+    if (gameMode === 'simulating' && simTimer) {
+      clearInterval(simTimer);
+      simTimer = null;
+      simPausedByModal = true;
+    }
+  }
+
+  function resumeSimFromModal() {
+    if (simPausedByModal && gameMode === 'simulating') {
+      simTimer = setInterval(simTickFn, 1000);
+      simPausedByModal = false;
+    }
+  }
+
+  // Draw sprite thumbnails inside help modal canvases (2× scale)
+  function drawHelpThumbnails() {
+    document.querySelectorAll('.help-thumb[data-sprite]').forEach(cvs => {
+      const frame = cvs.dataset.sprite;
+      const rot   = parseInt(cvs.dataset.rot || '0');
+      const gw    = parseInt(cvs.dataset.w || '1');
+      const gh    = parseInt(cvs.dataset.h || '1');
+      cvs.width   = gw * 64;
+      cvs.height  = gh * 64;
+      const ctx   = cvs.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      drawSprite(ctx, frame, 0, 0, rot, 2);
+
+      // Nutrient screen overlay
+      if (cvs.dataset.nutScreen) {
+        const sd = SCREEN_DEFS.nutrient;
+        ctx.fillStyle = cvs.dataset.nutScreen;
+        ctx.fillRect(sd.x * 2, sd.y * 2, sd.w * 2, sd.h * 2);
+      }
+
+      // Red port dots
+      if (cvs.dataset.dots) {
+        const dots = cvs.dataset.dots.split(',');
+        const half = 32; // half of 64px cell
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.85)';
+        for (const port of dots) {
+          let dx, dy;
+          switch (port.trim()) {
+            case 'top':    dx = half; dy = 0;    break;
+            case 'bottom': dx = half; dy = 64;   break;
+            case 'left':   dx = 0;    dy = half; break;
+            case 'right':  dx = 64;   dy = half; break;
+            default: continue;
+          }
+          ctx.beginPath();
+          ctx.arc(dx, dy, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+  }
+
+  // Help modal tab switching (remembers scroll position per tab)
+  const helpScrollPositions = {};
+  document.querySelectorAll('.help-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const scrollEl = document.querySelector('#help-modal .modal-scroll');
+      // Save current tab's scroll position
+      const curTab = document.querySelector('.help-tab.active');
+      if (curTab && scrollEl) helpScrollPositions[curTab.dataset.tab] = scrollEl.scrollTop;
+
+      document.querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.help-page').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('help-' + tab.dataset.tab).classList.add('active');
+
+      // Restore saved scroll position
+      if (scrollEl) scrollEl.scrollTop = helpScrollPositions[tab.dataset.tab] || 0;
+    });
+  });
+
+  // Help modal
+  function openHelpModal() {
+    pauseSimForModal();
+    document.getElementById('help-modal').classList.remove('hidden');
+    drawHelpThumbnails();
+  }
+
+  function closeHelpModal() {
+    document.getElementById('help-modal').classList.add('hidden');
+    if (!document.getElementById('guide-modal').classList.contains('hidden')) return;
+    resumeSimFromModal();
+  }
+
+  document.getElementById('help-btn').addEventListener('click', openHelpModal);
+  document.getElementById('help-close').addEventListener('click', closeHelpModal);
+  document.getElementById('help-modal').addEventListener('click', e => {
+    if (e.target.id === 'help-modal') closeHelpModal();
+  });
+
+  // Field Guide modal — data-driven content per plant type
+  const GUIDE_CONTENT = {
+    lettuce: {
+      title: 'Lettuce',
+      subtitle: 'Lactuca sativa',
+      html: `
+        <h3>About</h3>
+        <img class="guide-img" src="sprites/lettuce.info1.jpg" width="240" alt="Lettuce in space habitat">
+        <p>Lettuce was one of the first crops successfully grown and eaten aboard the International Space Station. In 2015, astronauts made history by consuming red romaine lettuce grown entirely in orbit &mdash; the first fresh food eaten in space that wasn't brought from Earth.</p>
+        <p>Analysis confirmed the space-grown lettuce was free of harmful microbes and at least as nutritious as its Earth-grown counterpart.</p>
+        <div style="clear:both"></div>
+
+        <h3>NASA's Veggie System</h3>
+        <img class="guide-img right noborder" src="sprites/lettuce.info2.png" width="140" alt="Lettuce under LED light">
+        <p>NASA's Vegetable Production System &mdash; called "Veggie" &mdash; is a plant growth chamber aboard the ISS roughly the size of a carry-on suitcase. Operational since 2014, it holds up to six plants under a bank of LEDs tuned to specific light spectra.</p>
+        <p>Each plant grows in a "plant pillow," a small packet of clay-based media with controlled-release fertilizer. In microgravity, these pillows are essential: without them, water clumps into floating bubbles and roots either drown or suffocate. Capillary action &mdash; not gravity &mdash; delivers water and nutrients to the roots.</p>
+        <div style="clear:both"></div>
+
+        <h3>Why Hydroponics in Space?</h3>
+        <p>Without gravity, traditional soil farming is impractical. Hydroponics delivers water and nutrients directly to plant roots through channels or wicking substrates, using up to 90% less water than soil farming. For future Mars missions, fresh crops will be critical &mdash; vitamins in prepackaged food degrade over time, making plant-based growing systems essential for long-duration voyages.</p>
+        <p>Astronauts also report that tending a small garden improves morale on long missions &mdash; a welcome touch of Earth in the void of space.</p>
+
+        <h3>Growing Requirements</h3>
+        <div class="guide-req">
+          <ul>
+            <li><strong>Light:</strong> Blue spectrum &mdash; promotes compact, leafy vegetative growth (14&ndash;16 hrs/day)</li>
+            <li><strong>Nutrients:</strong> Medium concentration (EC 0.8&ndash;1.2 mS/cm)</li>
+            <li><strong>pH:</strong> 5.5 &ndash; 6.0 optimal. Slightly acidic ensures nutrient availability.</li>
+            <li><strong>Airflow:</strong> Helpful but not critical. Prevents CO<sub>2</sub> buildup around leaves.</li>
+            <li><strong>Growth cycle:</strong> 28&ndash;35 days from seed to harvest</li>
+            <li><strong>Key nutrient:</strong> Calcium &mdash; deficiency causes tip burn, a common hydroponic issue.</li>
+          </ul>
+        </div>
+      `,
+    },
+
+    tomato: {
+      title: 'Tomato',
+      subtitle: 'Solanum lycopersicum',
+      html: `
+        <h3>About</h3>
+        <img class="guide-img" src="sprites/tomato.info1.jpg" width="240" alt="Tomatoes growing in space habitat">
+        <p>Tomatoes are one of the most ambitious crops attempted in space agriculture. Unlike leafy greens, tomatoes require flowering and pollination to produce fruit &mdash; processes complicated by the absence of gravity, wind, and pollinators in a spacecraft.</p>
+        <p>In 2023, astronauts aboard the ISS successfully grew dwarf tomatoes as part of NASA's Veg-05 experiment. One tomato famously went missing for months before being found floating behind a panel &mdash; still intact, no signs of microbial contamination.</p>
+        <div style="clear:both"></div>
+
+        <h3>The Airflow Problem</h3>
+        <img class="guide-img right noborder" src="sprites/tomato.info2.png" width="140" alt="Tomato under grow light">
+        <p>On Earth, warm air rises and cool air sinks, creating natural convection that carries away moisture and CO&sub2; from leaf surfaces. In microgravity, this doesn't happen. Stagnant bubbles of humid air cling to the plant, creating perfect conditions for mold, fungal infections, and ethylene buildup that can damage fruit.</p>
+        <p>This makes fans absolutely critical for space-grown tomatoes. Without constant airflow, even a healthy plant can develop gray mold (Botrytis) within days. NASA's XROOTS experiment tested aeroponic and hydroponic methods specifically to address these challenges for larger fruiting crops.</p>
+        <div style="clear:both"></div>
+
+        <h3>Pollination in Zero-G</h3>
+        <p>Tomatoes are self-pollinating on Earth, relying on wind and vibrating insects to shake pollen loose. In space, astronauts must manually pollinate by gently vibrating flower clusters with an electric toothbrush or similar tool &mdash; a technique borrowed from greenhouse farming. Without this step, flowers bloom but never set fruit.</p>
+
+        <h3>Growing Requirements</h3>
+        <div class="guide-req">
+          <ul>
+            <li><strong>Light:</strong> Red spectrum &mdash; promotes flowering and fruit development (12&ndash;14 hrs/day)</li>
+            <li><strong>Nutrients:</strong> High concentration (EC 2.0&ndash;3.5 mS/cm) &mdash; fruiting demands heavy feeding</li>
+            <li><strong>pH:</strong> 5.5&ndash;6.5 optimal. Stable acidity prevents blossom end rot.</li>
+            <li><strong>Airflow:</strong> CRITICAL &mdash; prevents mold and ensures gas exchange (no gravity-driven convection)</li>
+            <li><strong>Growth cycle:</strong> 50&ndash;70 days to first harvest</li>
+            <li><strong>Key challenge:</strong> Pollination &mdash; requires manual vibration of flower clusters in zero-g.</li>
+          </ul>
+        </div>
+      `,
+    },
+
+    wheat: {
+      title: 'Wheat',
+      subtitle: 'Triticum aestivum',
+      html: `
+        <h3>About</h3>
+        <img class="guide-img" src="sprites/wheat.info1.jpg" width="240" alt="Wheat growing in space facility">
+        <p>Wheat is a staple grain crop being studied for long-duration space missions. While leafy greens provide vitamins and morale, wheat could provide the caloric foundation of a space crew's diet &mdash; bread, pasta, and other carbohydrate-rich foods essential for sustaining hard-working astronauts.</p>
+        <p>In 2002, NASA's CELSS Breadboard Project at Kennedy Space Center achieved the first "seed-to-seed" wheat lifecycle in a closed environment &mdash; proving that grain crops could reproduce entirely within an artificial habitat, a milestone for future lunar and Martian colonies.</p>
+        <div style="clear:both"></div>
+
+        <h3>The Long Game</h3>
+        <img class="guide-img right noborder" src="sprites/wheat.info2.png" width="140" alt="Wheat under grow light">
+        <p>Unlike quick-harvest greens, wheat is a commitment. A full crop requires 70&ndash;100 days and passes through distinct growth stages: germination, tillering, stem elongation, heading, flowering, and grain-filling. Each stage has different demands &mdash; full-spectrum lighting throughout ensures the plant gets what it needs at every phase.</p>
+        <p>The payoff is worth the wait. A single harvest can be milled into flour for bread, pasta, tortillas, and porridge &mdash; versatile staples that store well without refrigeration, a critical advantage in spacecraft with limited power.</p>
+        <div style="clear:both"></div>
+
+        <h3>Closing the Loop</h3>
+        <p>Wheat plays a dual role in space habitat design. Beyond food, wheat plants are exceptional at converting CO&sub2; into oxygen and recycling wastewater through transpiration. NASA estimates a 20-square-meter wheat crop could provide roughly half the caloric needs of one astronaut while simultaneously scrubbing CO&sub2; from the cabin air &mdash; making it a cornerstone of bioregenerative life support systems.</p>
+
+        <h3>Growing Requirements</h3>
+        <div class="guide-req">
+          <ul>
+            <li><strong>Light:</strong> Purple (full spectrum) &mdash; balanced coverage for all growth stages (16&ndash;20 hrs/day)</li>
+            <li><strong>Nutrients:</strong> Medium concentration (EC 1.2&ndash;1.8 mS/cm) &mdash; steady, moderate feeding</li>
+            <li><strong>pH:</strong> 5.5&ndash;6.5 optimal. Wheat tolerates a wider range but uptake suffers outside it.</li>
+            <li><strong>Airflow:</strong> Helpful but not critical. Strengthens stems through mechanical stress (thigmomorphogenesis).</li>
+            <li><strong>Growth cycle:</strong> 70&ndash;100 days from seed to grain harvest</li>
+            <li><strong>Key fact:</strong> One of the first crops to complete a full seed-to-seed lifecycle in a closed space environment.</li>
+          </ul>
+        </div>
+      `,
+    },
+  };
+
+  function openGuideModal() {
+    pauseSimForModal();
+    const data = GUIDE_CONTENT[currentPlantType];
+    if (!data) return;
+    document.getElementById('guide-title').textContent =
+      'Field Guide: ' + data.title;
+    document.getElementById('guide-body').innerHTML = data.html;
+    document.getElementById('guide-modal').classList.remove('hidden');
+  }
+
+  function closeGuideModal() {
+    document.getElementById('guide-modal').classList.add('hidden');
+    if (!document.getElementById('help-modal').classList.contains('hidden')) return;
+    resumeSimFromModal();
+  }
+
+  document.getElementById('guide-btn').addEventListener('click', openGuideModal);
+  document.getElementById('guide-close').addEventListener('click', closeGuideModal);
+  document.getElementById('guide-modal').addEventListener('click', e => {
+    if (e.target.id === 'guide-modal') closeGuideModal();
+  });
+
+  // ══════════════════════════════════════════════════════════════════
+  // Tutorial tour system — spotlight walkthrough on first load
+  // Fires once after Scenario 1 intro modal closes (localStorage-gated).
+  // Replay button added to the help modal.
+  // ══════════════════════════════════════════════════════════════════
+  const HSL_Tutorial = (function() {
+    const FLAG_KEY = 'hsl_tutorial_v1_opening';
+
+    function flagSet()  { try { return localStorage.getItem(FLAG_KEY) === '1'; } catch(e) { return false; } }
+    function markFlag() { try { localStorage.setItem(FLAG_KEY, '1'); }           catch(e) {} }
+    function clearFlag(){ try { localStorage.removeItem(FLAG_KEY); }              catch(e) {} }
+
+    const spotlight = document.getElementById('tour-spotlight');
+    const card      = document.getElementById('tour-card');
+    const titleEl   = document.getElementById('tour-title');
+    const bodyEl    = document.getElementById('tour-body');
+    const nextBtn   = document.getElementById('tour-next');
+    const skipBtn   = document.getElementById('tour-skip');
+    const gameEl    = document.getElementById('game');
+
+    let tourActive = false;
+    let current = null;
+
+    const TOUR_STEPS = [
+      {
+        anchor: '#parts-bin',
+        title: 'COMPONENTS',
+        body: '<b>Your build kit.</b> Drag components from this panel onto the workspace grid. Each component type has a limited quantity shown in the corner.'
+      },
+      {
+        anchor: '#workspace',
+        title: 'WORKSPACE',
+        body: '<b>Build your system here.</b> Components snap to grid positions when dropped. Click a placed component to rotate it. Drag it off the workspace to remove it.'
+      },
+      {
+        anchor: '#power-btn',
+        title: 'RUN SIMULATION',
+        body: '<b>Start and stop the simulation.</b> Connect your elements first, then press the POWER button. The simulation advances day by day — watch the grow channel and the log panel on the right.'
+      },
+      {
+        anchor: '#status-bar',
+        title: 'SYSTEM READOUTS',
+        body: '<b>Monitor your grow conditions.</b> Flow status, light spectrum, and harvest countdown are always shown. Add a pH sensor to unlock nutrient concentration and pH readings.'
+      },
+      {
+        anchor: '#info-panel',
+        title: 'GUIDANCE',
+        body: '<b>Context-sensitive hints.</b> This bar tells you what your system needs. During simulation, it shows observations about how your system is performing.'
+      },
+      {
+        anchor: '#guide-btn',
+        title: 'CROP FIELD GUIDE',
+        body: '<b>Learn about your crop.</b> Real growing requirements, space agriculture history, and what conditions to watch for. Changes based on scenario crop'
+      },
+      {
+        anchor: '#help-btn',
+        title: 'HELP',
+        body: '<b>Component reference.</b> Click this anytime to review what each component does and how the system works. You can also replay this tour from the help panel.'
+      },
+    ];
+
+    function showTour() {
+      if (!TOUR_STEPS.length) return;
+      current = { steps: TOUR_STEPS, idx: 0 };
+      tourActive = true;
+      spotlight.classList.remove('tour-hidden');
+      card.classList.remove('tour-hidden');
+      renderStep();
+    }
+
+    function endTour() {
+      tourActive = false;
+      current = null;
+      spotlight.classList.add('tour-hidden');
+      card.classList.add('tour-hidden');
+    }
+
+    function renderStep() {
+      if (!current) return;
+      const step = current.steps[current.idx];
+      const anchor = document.querySelector(step.anchor);
+      if (!anchor) { advanceStep(); return; }
+
+      const gameRect = gameEl.getBoundingClientRect();
+      const scale = gameRect.width / 960 || 1;
+      const r = anchor.getBoundingClientRect();
+      const pad = 4;
+      let sTop  = (r.top  - gameRect.top)  / scale - pad;
+      let sLeft = (r.left - gameRect.left) / scale - pad;
+      let sW    = r.width  / scale + pad * 2;
+      let sH    = r.height / scale + pad * 2;
+
+      if (sLeft < 0) { sW += sLeft; sLeft = 0; }
+      if (sTop  < 0) { sH += sTop;  sTop  = 0; }
+      if (sLeft + sW > 960) sW = 960 - sLeft;
+      if (sTop  + sH > 640) sH = 640 - sTop;
+
+      spotlight.style.top    = sTop  + 'px';
+      spotlight.style.left   = sLeft + 'px';
+      spotlight.style.width  = sW    + 'px';
+      spotlight.style.height = sH    + 'px';
+
+      titleEl.textContent = step.title;
+      bodyEl.innerHTML    = step.body;
+      nextBtn.textContent = (current.idx === current.steps.length - 1) ? 'FINISH' : 'NEXT →';
+
+      const cardW = 300, gap = 12, margin = 8, gameW = 960, gameH = 640;
+      const cardH = card.offsetHeight || 160;
+      const candidates = [
+        { top: sTop + sH + gap,                         left: sLeft + (sW / 2) - (cardW / 2) },
+        { top: sTop - cardH - gap,                       left: sLeft + (sW / 2) - (cardW / 2) },
+        { top: sTop + (sH / 2) - (cardH / 2),            left: sLeft + sW + gap },
+        { top: sTop + (sH / 2) - (cardH / 2),            left: sLeft - cardW - gap },
+      ];
+      const clamp = c => ({
+        top:  Math.max(margin, Math.min(c.top,  gameH - cardH - margin)),
+        left: Math.max(margin, Math.min(c.left, gameW - cardW - margin)),
+      });
+      const noOverlap = c =>
+        c.left + cardW <= sLeft || c.left >= sLeft + sW ||
+        c.top  + cardH <= sTop  || c.top  >= sTop  + sH;
+      const clamped = candidates.map(clamp);
+      const chosen = clamped.find(noOverlap) || clamped[0];
+      card.style.top  = chosen.top  + 'px';
+      card.style.left = chosen.left + 'px';
+    }
+
+    function advanceStep() {
+      if (!current) return;
+      if (current.idx < current.steps.length - 1) {
+        current.idx++;
+        renderStep();
+      } else {
+        endTour();
+      }
+    }
+
+    nextBtn.addEventListener('click', advanceStep);
+    skipBtn.addEventListener('click', endTour);
+
+    function onIntroModalClosed() {
+      if (currentLevel !== 0) return;
+      if (flagSet()) return;
+      markFlag();
+      setTimeout(showTour, 300);
+    }
+
+    function replayTour() {
+      clearFlag();
+      showTour();
+    }
+
+    return { onIntroModalClosed, replayTour };
+  })();
+
+</script>
+
+</body>
+</html>
