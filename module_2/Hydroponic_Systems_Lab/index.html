@@ -90,6 +90,41 @@
     image-rendering: auto;
   }
 
+  /* ── Fullscreen logo button ───────────────────────────────── */
+  .fs-logo-btn {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+    line-height: 0;
+    transition: filter 0.18s, transform 0.18s;
+  }
+  .fs-logo-btn:hover { filter: brightness(1.15); transform: scale(1.07); }
+  .fs-logo-btn:focus-visible { outline: 2px solid #06b6d4; outline-offset: 3px; }
+  .fs-logo-btn::after {
+    content: attr(data-tip);
+    position: absolute;
+    top: 38px;
+    left: 0;
+    white-space: nowrap;
+    background: rgba(11,15,31,0.92);
+    border: 1px solid rgba(6,182,212,0.35);
+    color: #06b6d4;
+    font-family: 'Press Start 2P', cursive;
+    font-size: 7px;
+    letter-spacing: 0.08em;
+    padding: 4px 8px;
+    border-radius: 3px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 100;
+  }
+  .fs-logo-btn:hover::after { opacity: 1; }
+
   #level-name {
     flex: 1;
     text-align: center;
@@ -1561,12 +1596,11 @@
 
   <!-- Title bar -->
   <div id="title-bar">
-    <div id="game-title"><img id="game-logo" src="sprites/interstellar-harvest-logo.png" alt="">Hydroponic Systems Lab</div>
+    <div id="game-title"><button class="fs-logo-btn" id="fs-btn" data-tip="FULLSCREEN" aria-label="Toggle fullscreen"><img id="game-logo" src="sprites/interstellar-harvest-logo.png" alt=""></button>Hydroponic Systems Lab</div>
     <div id="level-name">Scenario 1: Basic Nutrient Circuit<span id="plant-name" style="color:#5aca6a">Lettuce</span></div>
     <div id="title-btns">
       <button class="title-text-btn" id="guide-btn">Field Guide</button>
       <button class="title-circle-btn" id="help-btn">?</button>
-      <button class="title-circle-btn" id="fs-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen" style="font-family:system-ui,'Segoe UI Symbol',sans-serif;font-size:14px;line-height:1;">⛶</button>
     </div>
     <!-- Level select dropdown -->
     <div id="level-select"></div>
@@ -4680,9 +4714,7 @@
 
     document.addEventListener('fullscreenchange', () => {
       scaleGame();   // existing viewport scaler fills the new dimensions
-      const on = !!document.fullscreenElement;
-      fsBtn.textContent = on ? '✕' : '⛶';
-      fsBtn.title = on ? 'Exit fullscreen' : 'Toggle fullscreen';
+      fsBtn.setAttribute('data-tip', document.fullscreenElement ? 'EXIT FULL' : 'FULLSCREEN');
     });
   })();
 
