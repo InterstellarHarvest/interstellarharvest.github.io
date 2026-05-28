@@ -791,24 +791,33 @@
             pointer-events: none;
             z-index: 150;
         }
-        .tour-spotlight {
+        /* Dark backdrop; rectangular holes are punched per-anchor via mask (see renderStep) */
+        #tour-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.78);
+            pointer-events: none;
+        }
+        /* One glowing frame per highlighted anchor */
+        .tour-frame {
             position: absolute;
             pointer-events: none;
             border: 2px solid #06b6d4;
             border-radius: 4px;
             box-shadow:
-                0 0 0 9999px rgba(0, 0, 0, 0.78),
                 0 0 24px rgba(6, 182, 212, 0.7),
                 inset 0 0 12px rgba(6, 182, 212, 0.3);
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             animation: tour-spotlight-pulse 2s ease-in-out infinite;
+            z-index: 1;
         }
         @keyframes tour-spotlight-pulse {
-            0%, 100% { box-shadow: 0 0 0 9999px rgba(0,0,0,0.78), 0 0 24px rgba(6,182,212,0.7), inset 0 0 12px rgba(6,182,212,0.3); }
-            50%      { box-shadow: 0 0 0 9999px rgba(0,0,0,0.78), 0 0 32px rgba(6,182,212,0.9), inset 0 0 16px rgba(6,182,212,0.5); }
+            0%, 100% { box-shadow: 0 0 24px rgba(6,182,212,0.7), inset 0 0 12px rgba(6,182,212,0.3); }
+            50%      { box-shadow: 0 0 32px rgba(6,182,212,0.9), inset 0 0 16px rgba(6,182,212,0.5); }
         }
         .tour-card {
             position: absolute;
+            z-index: 2;
             width: 320px;
             background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
             border: 3px outset #06b6d4;
@@ -1342,9 +1351,9 @@
             </div>
         </div>
 
-        <!-- Tutorial tour layer (spotlight + card) -->
+        <!-- Tutorial tour layer (masked overlay + per-anchor frames + card) -->
         <div id="tour-layer">
-            <div id="tour-spotlight" class="tour-spotlight tour-hidden"></div>
+            <div id="tour-overlay" class="tour-hidden"></div>
             <div id="tour-card" class="tour-card tour-hidden" role="dialog" aria-modal="false" aria-labelledby="tour-title">
                 <div class="tour-card-header">
                     <div class="tour-card-title" id="tour-title">TITLE</div>
@@ -4940,7 +4949,7 @@
             function markFlag()  { try { sessionStorage.setItem(FLAG_KEY, '1'); }            catch(e) {} }
             function clearFlag() { try { sessionStorage.removeItem(FLAG_KEY); }              catch(e) {} }
 
-            const spotlight = document.getElementById('tour-spotlight');
+            const overlay   = document.getElementById('tour-overlay');
             const card      = document.getElementById('tour-card');
             const titleEl   = document.getElementById('tour-title');
             const bodyEl    = document.getElementById('tour-body');
@@ -4950,6 +4959,7 @@
 
             let tourActive = false;
             let current = null;
+            let frames = []; // pool of .tour-frame boxes, reused across steps
 
             const TOUR_STEPS = [
                 {
@@ -4993,7 +5003,7 @@
                 if (!TOUR_STEPS.length) return;
                 current = { steps: TOUR_STEPS, idx: 0 };
                 tourActive = true;
-                spotlight.classList.remove('tour-hidden');
+                overlay.classList.remove('tour-hidden');
                 card.classList.remove('tour-hidden');
                 renderStep();
             }
@@ -5001,9 +5011,21 @@
             function endTour() {
                 tourActive = false;
                 current = null;
-                spotlight.classList.add('tour-hidden');
+                overlay.classList.add('tour-hidden');
                 card.classList.add('tour-hidden');
+                frames.forEach(f => f.classList.add('tour-hidden'));
                 markFlag();
+            }
+
+            // Grow/shrink the frame pool to exactly `n` visible boxes
+            function ensureFrames(n) {
+                while (frames.length < n) {
+                    const f = document.createElement('div');
+                    f.className = 'tour-frame';
+                    overlay.insertAdjacentElement('afterend', f);
+                    frames.push(f);
+                }
+                frames.forEach((f, i) => f.classList.toggle('tour-hidden', i >= n));
             }
 
             function renderStep() {
@@ -5014,33 +5036,58 @@
 
                 const appRect = appEl.getBoundingClientRect();
                 const scale = appRect.width / 1200 || 1;
+                const APP_W = 1200, APP_H = 800;
+                const pad = 6;
 
-                // Union bounding box across all matched anchors
-                let minTop = Infinity, minLeft = Infinity, maxBottom = -Infinity, maxRight = -Infinity;
+                // One padded, clamped box per matched anchor (app-internal coords)
+                const boxes = [];
                 anchors.forEach(a => {
                     const ar = a.getBoundingClientRect();
-                    minTop    = Math.min(minTop, ar.top);
-                    minLeft   = Math.min(minLeft, ar.left);
-                    maxBottom = Math.max(maxBottom, ar.bottom);
-                    maxRight  = Math.max(maxRight, ar.right);
+                    let left = (ar.left - appRect.left) / scale - pad;
+                    let top  = (ar.top  - appRect.top)  / scale - pad;
+                    let w    = ar.width  / scale + pad * 2;
+                    let h    = ar.height / scale + pad * 2;
+                    if (left < 0) { w += left; left = 0; }
+                    if (top  < 0) { h += top;  top  = 0; }
+                    if (left + w > APP_W) w = APP_W - left;
+                    if (top  + h > APP_H) h = APP_H - top;
+                    boxes.push({ left, top, width: w, height: h });
                 });
-                const r = { top: minTop, left: minLeft, width: maxRight - minLeft, height: maxBottom - minTop };
-                const pad = 6;
-                let sTop  = (r.top  - appRect.top)  / scale - pad;
-                let sLeft = (r.left - appRect.left) / scale - pad;
-                let sW    = r.width  / scale + pad * 2;
-                let sH    = r.height / scale + pad * 2;
 
-                const APP_W = 1200, APP_H = 800;
-                if (sLeft < 0) { sW += sLeft; sLeft = 0; }
-                if (sTop  < 0) { sH += sTop;  sTop  = 0; }
-                if (sLeft + sW > APP_W) sW = APP_W - sLeft;
-                if (sTop  + sH > APP_H) sH = APP_H - sTop;
+                // Draw a glowing frame over each anchor
+                ensureFrames(boxes.length);
+                boxes.forEach((b, i) => {
+                    const f = frames[i];
+                    f.style.left   = b.left   + 'px';
+                    f.style.top    = b.top    + 'px';
+                    f.style.width  = b.width  + 'px';
+                    f.style.height = b.height + 'px';
+                });
 
-                spotlight.style.top    = sTop  + 'px';
-                spotlight.style.left   = sLeft + 'px';
-                spotlight.style.width  = sW    + 'px';
-                spotlight.style.height = sH    + 'px';
+                // Punch a transparent hole in the dark overlay for each box
+                const baseLayer = 'linear-gradient(#000 0 0)';
+                const layers    = [baseLayer, ...boxes.map(() => baseLayer)].join(', ');
+                const positions = ['0 0', ...boxes.map(b => `${b.left}px ${b.top}px`)].join(', ');
+                const sizes     = ['100% 100%', ...boxes.map(b => `${b.width}px ${b.height}px`)].join(', ');
+                const repeats   = boxes.map(() => 'no-repeat').concat('no-repeat').join(', ');
+                const stdComp   = boxes.map(() => 'exclude').join(', ');
+                const wkComp    = boxes.map(() => 'xor').join(', ');
+                overlay.style.webkitMaskImage     = layers;
+                overlay.style.maskImage           = layers;
+                overlay.style.webkitMaskPosition  = positions;
+                overlay.style.maskPosition        = positions;
+                overlay.style.webkitMaskSize      = sizes;
+                overlay.style.maskSize            = sizes;
+                overlay.style.webkitMaskRepeat    = repeats;
+                overlay.style.maskRepeat          = repeats;
+                overlay.style.webkitMaskComposite = wkComp;
+                overlay.style.maskComposite       = stdComp;
+
+                // Union of all boxes — used only to place the info card
+                const sLeft = Math.min(...boxes.map(b => b.left));
+                const sTop  = Math.min(...boxes.map(b => b.top));
+                const sW    = Math.max(...boxes.map(b => b.left + b.width))  - sLeft;
+                const sH    = Math.max(...boxes.map(b => b.top  + b.height)) - sTop;
 
                 titleEl.textContent = step.title;
                 bodyEl.innerHTML    = step.body;
