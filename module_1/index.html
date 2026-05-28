@@ -155,6 +155,41 @@
       image-rendering: -webkit-optimize-contrast;
     }
 
+    /* ── Fullscreen logo button ───────────────────────────────── */
+    .fs-logo-btn {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      border-radius: 50%;
+      flex-shrink: 0;
+      position: relative;
+      line-height: 0;
+      transition: filter 0.18s, transform 0.18s;
+    }
+    .fs-logo-btn:hover { filter: brightness(1.15); transform: scale(1.07); }
+    .fs-logo-btn:focus-visible { outline: 2px solid var(--sun-glow); outline-offset: 3px; }
+    .fs-logo-btn::after {
+      content: attr(data-tip);
+      position: absolute;
+      bottom: -26px;
+      right: 0;
+      white-space: nowrap;
+      background: rgba(11,15,31,0.92);
+      border: 1px solid rgba(255,200,87,0.35);
+      color: var(--sun-glow);
+      font-family: var(--font-pixel);
+      font-size: 7px;
+      letter-spacing: 0.08em;
+      padding: 4px 8px;
+      border-radius: 3px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+      z-index: 10;
+    }
+    .fs-logo-btn:hover::after { opacity: 1; }
+
     .course-name {
       display: flex;
       flex-direction: column;
@@ -992,9 +1027,11 @@
         <span class="course-name-line">INTERSTELLAR HARVEST</span>
         <span class="course-name-line">GROWING FOOD BEYOND EARTH</span>
       </div>
-      <img src="https://static.wixstatic.com/media/1dba8d_bafa701b1dff45a29f3fc27738dad377~mv2.png"
-        alt="Interstellar Harvest course logo: a young plant in soil under a sun rising over a starry sky"
-        class="header-logo" onerror="this.style.display='none';">
+      <button class="fs-logo-btn" id="fs-btn" data-tip="FULLSCREEN" aria-label="Toggle fullscreen" title="Toggle fullscreen">
+        <img src="https://static.wixstatic.com/media/1dba8d_bafa701b1dff45a29f3fc27738dad377~mv2.png"
+          alt="Interstellar Harvest course logo: a young plant in soil under a sun rising over a starry sky"
+          class="header-logo" onerror="this.style.display='none';">
+      </button>
     </header>
 
     <!-- Progress nav -->
@@ -1417,6 +1454,41 @@
       const altText = img.alt;
       openLightbox(img.src, destName, statusText, statusClass, variableText, caption, altText);
     });
+
+    /* ========== Fullscreen toggle + enlarge-to-fit ========== */
+    (function () {
+      const fsBtn = document.getElementById('fs-btn');
+      const wrap  = document.querySelector('.wrap');
+      if (!fsBtn || !wrap) return;
+
+      // Enlarge content to fill the screen width; vertical overflow scrolls.
+      // zoom (not transform) so the grown content stays scrollable to the bottom.
+      function applyScale() {
+        if (document.fullscreenElement) {
+          wrap.style.zoom = '';                       // measure natural width
+          const scale = window.innerWidth / wrap.offsetWidth;
+          wrap.style.zoom = scale > 1 ? scale : '';   // only enlarge, never shrink
+          fsBtn.setAttribute('data-tip', 'EXIT FULL');
+        } else {
+          wrap.style.zoom = '';
+          fsBtn.setAttribute('data-tip', 'FULLSCREEN');
+        }
+      }
+
+      fsBtn.addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(err =>
+            console.warn('Fullscreen blocked:', err));
+        } else {
+          document.exitFullscreen();
+        }
+      });
+
+      document.addEventListener('fullscreenchange', applyScale);
+      window.addEventListener('resize', () => {
+        if (document.fullscreenElement) applyScale();
+      });
+    })();
   </script>
 </body>
 

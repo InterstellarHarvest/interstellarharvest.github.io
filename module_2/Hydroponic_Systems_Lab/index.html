@@ -1566,6 +1566,7 @@
     <div id="title-btns">
       <button class="title-text-btn" id="guide-btn">Field Guide</button>
       <button class="title-circle-btn" id="help-btn">?</button>
+      <button class="title-circle-btn" id="fs-btn" title="Toggle fullscreen" aria-label="Toggle fullscreen" style="font-family:system-ui,'Segoe UI Symbol',sans-serif;font-size:14px;line-height:1;">⛶</button>
     </div>
     <!-- Level select dropdown -->
     <div id="level-select"></div>
@@ -4659,6 +4660,28 @@
     }
 
     return { onIntroModalClosed, replayTour };
+  })();
+
+  // ── Fullscreen toggle ─────────────────────────────────────────
+  (function () {
+    const fsBtn = document.getElementById('fs-btn');
+    if (!fsBtn) return;
+
+    fsBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err =>
+          console.warn('Fullscreen blocked:', err));
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      scaleGame();   // existing viewport scaler fills the new dimensions
+      const on = !!document.fullscreenElement;
+      fsBtn.textContent = on ? '✕' : '⛶';
+      fsBtn.title = on ? 'Exit fullscreen' : 'Toggle fullscreen';
+    });
   })();
 
 </script>
