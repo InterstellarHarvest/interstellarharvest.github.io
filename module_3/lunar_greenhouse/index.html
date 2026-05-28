@@ -1168,22 +1168,22 @@
                 <h2 class="pixel-title text-cyan-400 text-xl text-center mb-6">SELECT YOUR CROP</h2>
                 <div class="grid grid-cols-4 gap-4 mb-4">
                     <!-- Hidden crops kept in DOM for future re-enabling -->
-                    <button onclick="showVeggieInfo('beans')" hidden
+                    <button onclick="showVeggieInfo('beans')" hidden style="display:none"
                         class="retro-btn p-4 rounded flex flex-col items-center gap-2 hover:bg-amber-900">
                         <img src="sprites/beans/beans-icon.png" alt="BEANS" class="crop-icon">
                         <span class="text-green-500 crop-selector-veggie-name">BEANS</span>
                     </button>
-                    <button onclick="showVeggieInfo('bell_pepper')" hidden
+                    <button onclick="showVeggieInfo('bell_pepper')" hidden style="display:none"
                         class="retro-btn p-4 rounded flex flex-col items-center gap-2 hover:bg-yellow-900">
                         <img src="sprites/bellpepper/bellpepper-icon.png" alt="BELL PEPPER" class="crop-icon">
                         <span class="text-red-400 crop-selector-veggie-name">BELL PEPPER</span>
                     </button>
-                    <button onclick="showVeggieInfo('cucumber')" hidden
+                    <button onclick="showVeggieInfo('cucumber')" hidden style="display:none"
                         class="retro-btn p-4 rounded flex flex-col items-center gap-2 hover:bg-green-900">
                         <img src="sprites/cucumber/cucumber-icon.png" alt="CUCUMBER" class="crop-icon">
                         <span class="text-green-400 crop-selector-veggie-name">CUCUMBER</span>
                     </button>
-                    <button onclick="showVeggieInfo('eggplant')" hidden
+                    <button onclick="showVeggieInfo('eggplant')" hidden style="display:none"
                         class="retro-btn p-4 rounded flex flex-col items-center gap-2 hover:bg-purple-900">
                         <img src="sprites/eggplant/eggplant-icon.png" alt="EGGPLANT" class="crop-icon">
                         <span class="text-purple-400 crop-selector-veggie-name">EGGPLANT</span>
@@ -4965,9 +4965,9 @@
                     body: '<b>Set conditions for the upcoming phase.</b> Light, Water, and Food are three-position switches; Temperature is a slider. The optimal settings change every phase.'
                 },
                 {
-                    anchor: '#temp-meter',
+                    anchor: '#controls-panel .info-btn',
                     title: 'FIELD GUIDE',
-                    body: '<b>Tap the [?] next to any control</b> to open the Field Guide for that variable — what each level means and which crops it fits.'
+                    body: '<b>Tap any [?] next to a control</b> to open the Field Guide for that variable — what each level means and which crops it fits.'
                 },
                 {
                     anchor: '#crop-data-panel',
@@ -5006,12 +5006,22 @@
             function renderStep() {
                 if (!current) return;
                 const step = current.steps[current.idx];
-                const anchor = document.querySelector(step.anchor);
-                if (!anchor) { advanceStep(); return; }
+                const anchors = document.querySelectorAll(step.anchor);
+                if (!anchors.length) { advanceStep(); return; }
 
                 const appRect = appEl.getBoundingClientRect();
                 const scale = appRect.width / 1200 || 1;
-                const r = anchor.getBoundingClientRect();
+
+                // Union bounding box across all matched anchors
+                let minTop = Infinity, minLeft = Infinity, maxBottom = -Infinity, maxRight = -Infinity;
+                anchors.forEach(a => {
+                    const ar = a.getBoundingClientRect();
+                    minTop    = Math.min(minTop, ar.top);
+                    minLeft   = Math.min(minLeft, ar.left);
+                    maxBottom = Math.max(maxBottom, ar.bottom);
+                    maxRight  = Math.max(maxRight, ar.right);
+                });
+                const r = { top: minTop, left: minLeft, width: maxRight - minLeft, height: maxBottom - minTop };
                 const pad = 6;
                 let sTop  = (r.top  - appRect.top)  / scale - pad;
                 let sLeft = (r.left - appRect.left) / scale - pad;
@@ -5131,7 +5141,6 @@
         });
 
     </script>
-    <script>(function () { function c() { var b = a.contentDocument || a.contentWindow.document; if (b) { var d = b.createElement('script'); d.innerHTML = "window.__CF$cv$params={r:'9d1f6010c1992045',t:'MTc3MTc3MjY1OS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);"; b.getElementsByTagName('head')[0].appendChild(d) } } if (document.body) { var a = document.createElement('iframe'); a.height = 1; a.width = 1; a.style.position = 'absolute'; a.style.top = 0; a.style.left = 0; a.style.border = 'none'; a.style.visibility = 'hidden'; document.body.appendChild(a); if ('loading' !== document.readyState) c(); else if (window.addEventListener) document.addEventListener('DOMContentLoaded', c); else { var e = document.onreadystatechange || function () { }; document.onreadystatechange = function (b) { e(b); 'loading' !== document.readyState && (document.onreadystatechange = e, c()) } } } })();</script>
 
 </body>
 
