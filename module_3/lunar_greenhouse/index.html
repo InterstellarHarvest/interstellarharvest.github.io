@@ -4345,10 +4345,13 @@
             const projectedEnd = Math.max(0, Math.min(100, startHealth + dailyDelta * phaseDays));
             const avgHealth = (startHealth + projectedEnd) / 2;
 
-            // Carry health ratio into this stage's effective scale bounds
+            // Grow additively from the plant's current size toward this stage's max.
+            // Health scales how much of the remaining growth is realized; the plant
+            // never shrinks (growthRoom is clamped at 0 for non-increasing stages).
             const healthRatio = avgHealth / 100;
             gameState.plant.effectiveScaleStart = gameState.plant.scale || stage.scaleStart;
-            gameState.plant.effectiveScaleEnd   = stage.scaleEnd * healthRatio;
+            const growthRoom = Math.max(0, stage.scaleEnd - gameState.plant.effectiveScaleStart);
+            gameState.plant.effectiveScaleEnd   = gameState.plant.effectiveScaleStart + growthRoom * healthRatio;
 
             const startScale = gameState.plant.effectiveScaleStart;
             const endScale   = gameState.plant.effectiveScaleEnd;
