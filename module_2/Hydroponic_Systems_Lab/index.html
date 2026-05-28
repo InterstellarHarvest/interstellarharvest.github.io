@@ -3474,7 +3474,9 @@
     const scaleX = window.innerWidth  / 960;
     const scaleY = window.innerHeight / 640;
     const fit    = Math.min(scaleX, scaleY);
-    const scale  = fit >= 1 ? Math.floor(fit) : fit;
+    // Fullscreen: fill the screen with the largest fit (fractional ok).
+    // Windowed: snap to integer steps so pixel art stays crisp.
+    const scale  = document.fullscreenElement ? fit : (fit >= 1 ? Math.floor(fit) : fit);
     root.style.transform = `scale(${scale})`;
   }
 
