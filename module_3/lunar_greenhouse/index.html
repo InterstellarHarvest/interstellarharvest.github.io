@@ -52,6 +52,14 @@
             padding: clamp(0px, 2vh, 20px) 0;
         }
 
+        /* Fullscreen (triggered on veggie selection): center the scaled game on black */
+        html:fullscreen { background: #000; }
+        html:fullscreen body { align-items: center; padding: 0; }
+        html:fullscreen #app { margin: 0; }
+        html:-webkit-full-screen { background: #000; }
+        html:-webkit-full-screen body { align-items: center; padding: 0; }
+        html:-webkit-full-screen #app { margin: 0; }
+
         aside {
             overflow-y: auto;
             overflow-x: hidden;
@@ -1221,9 +1229,6 @@
                     </button>
                 </div>
                 <p class="crop-selector-subtitle">Choose wisely! Click on a crop to learn more about it.</p>
-                <p class="text-center mt-3">
-                    <button type="button" onclick="LG_Tutorial.replayTour()" class="text-cyan-500 hover:text-cyan-300 underline text-base" style="background:none;border:none;cursor:pointer;font-family:'VT323',monospace;">▶ Replay interface tour</button>
-                </p>
             </div>
         </div>
 
@@ -4680,9 +4685,21 @@
             showCropSelection();
         });
 
+        function requestGameFullscreen() {
+            if (document.fullscreenElement) return;
+            const el = document.documentElement;
+            const req = el.requestFullscreen || el.webkitRequestFullscreen;
+            if (req) {
+                Promise.resolve(req.call(el)).catch(() => {});
+            }
+        }
+
         function showVeggieInfo(cropType) {
             const veggieInfo = veggieInfoData[cropType];
             if (!veggieInfo) return;
+
+            // Veggie selection doubles as the user gesture to enter fullscreen
+            requestGameFullscreen();
 
             // Populate modal
             document.getElementById('veggie-info-icon').src = veggieInfo.icon;
@@ -5156,11 +5173,16 @@
         })();
         window.LG_Tutorial = LG_Tutorial;
 
-        // Responsive scaling: shrink the whole game as a unit on smaller screens
+        // Responsive scaling: scale the whole game as a unit to fit the viewport.
+        // Shrinks on small screens; enlarges to fill when fullscreen (aspect preserved).
         function scaleApp() {
             const scale = Math.min(window.innerWidth / 1200, window.innerHeight / 800);
             const app = document.getElementById('app');
-            if (scale < 1) {
+            if (document.fullscreenElement) {
+                app.style.transform = `scale(${scale})`;
+                app.style.transformOrigin = 'center center';
+                document.body.style.height = '';
+            } else if (scale < 1) {
                 app.style.transform = `scale(${scale})`;
                 app.style.transformOrigin = 'top center';
                 // Compensate body height so page doesn't scroll
@@ -5173,6 +5195,8 @@
         }
         scaleApp();
         window.addEventListener('resize', scaleApp);
+        document.addEventListener('fullscreenchange', scaleApp);
+        document.addEventListener('webkitfullscreenchange', scaleApp);
 
         // Position tooltips at cursor, keep within bounds
         document.addEventListener('mousemove', function (e) {
