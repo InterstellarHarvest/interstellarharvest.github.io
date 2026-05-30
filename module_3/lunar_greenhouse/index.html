@@ -792,6 +792,41 @@
             100% { opacity: 1; transform: scale(1); }
         }
 
+        /* ── Fullscreen logo button (ported from Hydroponic Lab) ── */
+        .fs-logo-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            border-radius: 50%;
+            flex-shrink: 0;
+            position: relative;
+            line-height: 0;
+            transition: filter 0.18s, transform 0.18s;
+        }
+        .fs-logo-btn:hover { filter: brightness(1.15); transform: scale(1.07); }
+        .fs-logo-btn:focus-visible { outline: 2px solid #06b6d4; outline-offset: 3px; }
+        .fs-logo-btn::after {
+            content: attr(data-tip);
+            position: absolute;
+            top: 56px;
+            left: 0;
+            white-space: nowrap;
+            background: rgba(11,15,31,0.92);
+            border: 1px solid rgba(6,182,212,0.35);
+            color: #06b6d4;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 8px;
+            letter-spacing: 0.08em;
+            padding: 4px 8px;
+            border-radius: 3px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            z-index: 100;
+        }
+        .fs-logo-btn:hover::after { opacity: 1; }
+
         /* ── Tutorial tour system (ported from Hydroponic Lab) ── */
         #tour-layer {
             position: absolute;
@@ -900,9 +935,11 @@
         <header class="flex-shrink-0 p-3 border-b-4 border-cyan-800 bg-gradient-to-b from-gray-900 to-black">
             <div class="flex justify-between items-center max-w-7xl mx-auto">
                 <div class="flex items-center gap-3">
-                    <img src="https://static.wixstatic.com/media/1dba8d_bafa701b1dff45a29f3fc27738dad377~mv2.png"
-                        alt="Lunar Greenhouse Logo" loading="lazy" style="height: 50px; width: auto;"
-                        onerror="console.error('Logo failed to load:', this.src); this.style.background='#e5e7eb'; this.alt='Logo unavailable';">
+                    <button class="fs-logo-btn" id="fs-btn" type="button" data-tip="FULLSCREEN" aria-label="Toggle fullscreen">
+                        <img id="game-logo" src="https://static.wixstatic.com/media/1dba8d_bafa701b1dff45a29f3fc27738dad377~mv2.png"
+                            alt="Lunar Greenhouse Logo" loading="lazy" style="height: 50px; width: auto;"
+                            onerror="console.error('Logo failed to load:', this.src); this.style.background='#e5e7eb'; this.alt='Logo unavailable';">
+                    </button>
                     <div>
                         <h1 id="game-title" class="pixel-title text-cyan-400 text-lg tracking-wider">LUNAR GREENHOUSE</h1>
                         <p id="game-subtitle" class="text-cyan-400 text-xl mt-1" aria-live="polite">Colony Agricultural Research Station</p>
@@ -1164,7 +1201,7 @@
                             title="Mission briefing & status guide">?</button>
                     </div>
                     <div id="phase-result-banner" class="hidden" role="status" aria-live="polite"
-                        style="margin-bottom:8px;padding:8px 10px;border-radius:4px;border-left:4px solid #4ade80;background:rgba(74,222,128,0.1);font-size:17px;line-height:1.35;"></div>
+                        style="margin-bottom:8px;padding:8px 10px;border-radius:4px;border-left:4px solid #4ade80;background:rgba(74,222,128,0.1);font-size:18px;line-height:1.35;color:#f3f4f6;"></div>
                     <div id="ai-message" class="text-green-300 text-lg leading-relaxed" style="flex:1;overflow:hidden;">
                         Welcome, Colonist! Select a crop to begin your agricultural research. The survival of the colony
                         depends on
@@ -5172,6 +5209,26 @@
             return { maybeStartTour, replayTour };
         })();
         window.LG_Tutorial = LG_Tutorial;
+
+        // ── Fullscreen toggle (logo doubles as enter/exit fullscreen button) ──
+        // Lets learners re-enter fullscreen after hitting Esc — without it
+        // they'd have to reload the page.
+        (function () {
+            const fsBtn = document.getElementById('fs-btn');
+            if (!fsBtn) return;
+            fsBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(err =>
+                        console.warn('Fullscreen blocked:', err));
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+            document.addEventListener('fullscreenchange', () => {
+                if (typeof scaleApp === 'function') scaleApp();
+                fsBtn.setAttribute('data-tip', document.fullscreenElement ? 'EXIT FULL' : 'FULLSCREEN');
+            });
+        })();
 
         // Responsive scaling: scale the whole game as a unit to fit the viewport.
         // Shrinks on small screens; enlarges to fill when fullscreen (aspect preserved).
