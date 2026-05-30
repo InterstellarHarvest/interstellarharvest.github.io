@@ -942,7 +942,6 @@
                     </button>
                     <div>
                         <h1 id="game-title" class="pixel-title text-cyan-400 text-lg tracking-wider">LUNAR GREENHOUSE</h1>
-                        <p id="game-subtitle" class="text-cyan-400 text-xl mt-1" aria-live="polite">Colony Agricultural Research Station</p>
                     </div>
                 </div>
                 <div class="flex items-center gap-6">
@@ -954,24 +953,26 @@
                             000
                         </div>
                     </div>
-                    <div class="text-center">
-                        <div class="text-gray-300 text-lg">
-                            PHASE
-                        </div>
-                        <div id="phase-display" class="pixel-title text-green-400 text-2xl" aria-live="polite" aria-label="Current phase">
-                            —/—
-                        </div>
-                    </div>
                 </div>
+            </div>
+            <!-- Phase Timeline Strip — second row of header -->
+            <div id="phase-timeline-strip"
+                 style="margin-top:4px;
+                        padding-top:4px;
+                        border-top:1px solid rgba(6,182,212,0.2);
+                        display:flex;
+                        align-items:center;
+                        width:100%;">
+                <!-- Populated by renderPhaseTimeline() -->
             </div>
         </header>
 
         <!-- Main Game Area -->
         <main class="flex-1 flex gap-4 p-4 overflow-hidden">
             <!-- Left Panel - Controls -->
-            <aside id="controls-panel" class="w-64 flex-shrink-0 flex flex-col gap-3">
+            <aside id="controls-panel" class="w-64 flex-shrink-0 flex flex-col gap-4">
                 <!-- Temperature Control -->
-                <div class="retro-panel p-3 rounded">
+                <div class="retro-panel px-3 py-2 rounded">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <div class="var-level-meter" id="temp-meter">
@@ -997,7 +998,7 @@
                 </div>
 
                 <!-- Light Control -->
-                <div class="retro-panel p-3 rounded relative">
+                <div class="retro-panel px-3 py-2 rounded relative">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <div class="var-level-meter" id="light-meter">
@@ -1026,7 +1027,7 @@
                 </div>
 
                 <!-- Water Control -->
-                <div class="retro-panel p-3 rounded relative">
+                <div class="retro-panel px-3 py-2 rounded relative">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <div class="var-level-meter" id="water-meter">
@@ -1055,7 +1056,7 @@
                 </div>
 
                 <!-- Food Control -->
-                <div class="retro-panel p-3 rounded relative">
+                <div class="retro-panel px-3 py-2 rounded relative">
                     <div class="flex items-center justify-between mb-2">
                         <div class="flex items-center gap-2">
                             <div class="var-level-meter" id="food-meter">
@@ -1335,6 +1336,19 @@
                 <div id="mission-complete-crop" class="text-cyan-300 text-2xl mb-3"></div>
                 <div id="mission-complete-badge" class="pixel-title text-xl mb-4" style="display:inline-block;padding:6px 16px;border:3px solid #4ade80;border-radius:4px;color:#4ade80;"></div>
                 <div id="mission-complete-summary" class="text-gray-300 text-xl mb-6 leading-relaxed"></div>
+                <!-- Space relevance paragraph — hidden until populated -->
+                <div id="mission-complete-relevance"
+                     style="display:none;
+                            background:rgba(6,182,212,0.08);
+                            border-left:4px solid #06b6d4;
+                            border-radius:4px;
+                            padding:10px 14px;
+                            margin:12px 0;
+                            color:#a5f3fc;
+                            font-size:17px;
+                            line-height:1.55;
+                            text-align:left;">
+                </div>
                 <div class="flex flex-col gap-3">
                     <button onclick="showCropSelection()" class="retro-btn px-8 py-3 text-green-400 text-xl rounded">
                         🌱 GROW ANOTHER CROP
@@ -3781,6 +3795,7 @@
             missionDay: 0,
             currentCrop: null,
             phaseAnimating: false,
+            phaseHistory: [],
             variables: { light: 2, water: 2, temp: 72, food: 2 },
             plant: {
                 health: 100,
@@ -4194,6 +4209,89 @@
             document.getElementById('agribot-status-bars').innerHTML = html;
         }
 
+        function renderPhaseTimeline() {
+            const strip = document.getElementById('phase-timeline-strip');
+            if (!strip) return;
+
+            if (!gameState.currentCrop) {
+                strip.innerHTML =
+                    '<div style="color:#374151; font-size:14px; letter-spacing:0.08em; padding:2px 0;">' +
+                    '— SELECT A CROP TO BEGIN —</div>';
+                return;
+            }
+
+            const crop   = cropData[gameState.currentCrop];
+            const stages = crop.stages;
+            let html = '';
+
+            stages.forEach((stage, i) => {
+                const histEntry  = gameState.phaseHistory.find(h => h.stageIndex === i);
+                const isCompleted = !!histEntry;
+                const isCurrent   = !isCompleted && i === gameState.plant.currentStage;
+
+                if (i > 0) {
+                    // Connector represents the transition out of the previous phase.
+                    // After that phase finishes, it stays filled in its end-health color.
+                    const prevHist = gameState.phaseHistory.find(h => h.stageIndex === i - 1);
+                    let fillColor = '#1f2937';
+                    let fillWidth = '0%';
+                    if (prevHist) {
+                        const h = prevHist.endHealth;
+                        if      (h >= 70) fillColor = '#4ade80';
+                        else if (h >= 40) fillColor = '#f59e0b';
+                        else              fillColor = '#ef4444';
+                        fillWidth = '100%';
+                    }
+                    html += `<div id="phase-connector-${i}" style="flex:0 0 55px; height:2px; background:#1f2937; position:relative; overflow:hidden;">` +
+                              `<div class="connector-fill" style="position:absolute; left:0; top:0; bottom:0; width:${fillWidth}; background:${fillColor};"></div>` +
+                            `</div>`;
+                }
+
+                let boxBg, boxBorder, labelColor, dayColor, dotColor;
+                if (isCompleted) {
+                    const h = histEntry.endHealth;
+                    if (h >= 70) {
+                        boxBg = 'rgba(22,101,52,0.55)'; boxBorder = '#16a34a';
+                        labelColor = '#86efac'; dotColor = '#4ade80'; dayColor = '#6b7280';
+                    } else if (h >= 40) {
+                        boxBg = 'rgba(120,53,15,0.55)'; boxBorder = '#d97706';
+                        labelColor = '#fcd34d'; dotColor = '#f59e0b'; dayColor = '#6b7280';
+                    } else {
+                        boxBg = 'rgba(127,29,29,0.55)'; boxBorder = '#dc2626';
+                        labelColor = '#fca5a5'; dotColor = '#f87171'; dayColor = '#6b7280';
+                    }
+                } else if (isCurrent) {
+                    boxBg = 'rgba(14,116,144,0.45)'; boxBorder = '#06b6d4';
+                    labelColor = '#67e8f9'; dotColor = '#06b6d4'; dayColor = '#6b7280';
+                } else {
+                    boxBg = 'rgba(17,24,39,0.6)'; boxBorder = '#374151';
+                    labelColor = '#4b5563'; dotColor = '#374151'; dayColor = '#374151';
+                }
+
+                const glowStyle = isCurrent
+                    ? `box-shadow:0 0 8px ${dotColor}, 0 0 2px ${dotColor};` : '';
+
+                const shortNameMap = { 'Fruit Development': 'FRUIT DEV.' };
+                const displayName = shortNameMap[stage.name] || stage.name.toUpperCase();
+
+                html +=
+                    `<div style="display:flex;flex:1 1 0;align-items:center;justify-content:center;gap:6px;` +
+                    `background:${boxBg};border:2px solid ${boxBorder};border-radius:4px;` +
+                    `padding:2px 8px;min-width:0;${glowStyle}">` +
+                    `<div style="width:8px;height:8px;border-radius:50%;background:${dotColor};` +
+                    `box-shadow:0 0 4px ${dotColor};flex-shrink:0;"></div>` +
+                    `<div style="font-family:'Press Start 2P',cursive;font-size:0.45rem;` +
+                    `color:${labelColor};letter-spacing:0.04em;line-height:1;white-space:nowrap;` +
+                    `overflow:hidden;text-overflow:ellipsis;">` +
+                    displayName + `</div>` +
+                    `<div style="color:${dayColor};font-size:11px;line-height:1;flex-shrink:0;">` +
+                    `${stage.daysStart}–${stage.daysEnd}d</div>` +
+                    `</div>`;
+            });
+
+            strip.innerHTML = html;
+        }
+
         function updateAIMessage() {
             if (!gameState.currentCrop) return;
 
@@ -4457,6 +4555,18 @@
                     else plantImg.style.filter = 'none';
                 }
 
+                // Phase timeline connector fill (leading out of the current stage)
+                const connector = document.getElementById(`phase-connector-${stageIndex + 1}`);
+                if (connector && connector.firstElementChild) {
+                    const fill = connector.firstElementChild;
+                    fill.style.width = (t * 100) + '%';
+                    let healthColor;
+                    if      (curHealth >= 70) healthColor = '#4ade80';
+                    else if (curHealth >= 40) healthColor = '#f59e0b';
+                    else                      healthColor = '#ef4444';
+                    fill.style.background = healthColor;
+                }
+
                 if (t < 1) {
                     requestAnimationFrame(tick);
                 } else {
@@ -4478,6 +4588,12 @@
             gameState.day = stage.daysEnd;
             gameState.missionDay += phaseDays;
             gameState.plant.health = Math.max(0, Math.min(100, endHealth));
+            // Record outcome for timeline color coding
+            gameState.phaseHistory.push({
+                stageIndex: stageIndex,
+                startHealth: startHealth,
+                endHealth: gameState.plant.health
+            });
             gameState.plant.accumulated = Math.min(100, gameState.plant.accumulated + phaseDays * (gameState.plant.health / 100));
 
             // Render final SVG state for this stage (may switch to dead asset if killed)
@@ -4498,8 +4614,37 @@
             else if (gameState.plant.health >= 60) { resultStatus = 'good'; statusLabel = 'GOOD'; }
             else { resultStatus = 'poor'; statusLabel = 'STRUGGLING'; }
 
+            // Build variable review HTML
+            const vars    = gameState.variables;
+            const opt     = stage.optimal;
+            const stageGuidance = (cropGuidanceData[gameState.currentCrop] || {})[getStageKey(stage.name)];
+
+            const varRows = [
+                { key:'light', label:'☀', val:['','LOW','MED','HIGH'][vars.light],  optVal:['','LOW','MED','HIGH'][opt.light],  ok: vars.light === opt.light },
+                { key:'water', label:'💧', val:['','LOW','MED','HIGH'][vars.water], optVal:['','LOW','MED','HIGH'][opt.water], ok: vars.water === opt.water },
+                { key:'food',  label:'🧪', val:['','LOW','MED','HIGH'][vars.food],  optVal:['','LOW','MED','HIGH'][opt.food],  ok: vars.food === opt.food  },
+                { key:'temp',  label:'🌡', val:`${vars.temp}°F`,                    optVal:`${opt.temp}°F`,                    ok: Math.abs(vars.temp - opt.temp) <= 5 }
+            ];
+
+            const varHTML = varRows.map(r => {
+                const explanation = (!r.ok && stageGuidance && stageGuidance.variables && stageGuidance.variables[r.key])
+                    ? stageGuidance.variables[r.key].explanation : null;
+                return `<div style="margin-top:4px;line-height:1.35;">` +
+                    `<span style="color:${r.ok ? '#4ade80' : '#fb923c'};font-size:16px;">` +
+                    `${r.ok ? '✓' : '✗'} ${r.label} ${r.val}` +
+                    `${r.ok ? '' : ` — optimal: <strong>${r.optVal}</strong>`}</span>` +
+                    (explanation
+                        ? `<div style="color:#9ca3af;font-size:14px;padding-left:16px;margin-top:2px;">` +
+                          `${explanation}</div>`
+                        : '') +
+                    `</div>`;
+            }).join('');
+
             showPhaseResultBanner(
-                `<strong>${stage.name.toUpperCase()} COMPLETE</strong> — Health: ${hpStr} (${deltaStr}) · Status: <strong>${statusLabel}</strong>`,
+                `<strong>${stage.name.toUpperCase()} COMPLETE</strong>` +
+                ` — Health: ${hpStr} (${deltaStr}) · Status: <strong>${statusLabel}</strong>` +
+                `<div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.1);">` +
+                varHTML + `</div>`,
                 resultStatus
             );
 
@@ -4508,11 +4653,11 @@
             // Advance to next stage or finish mission
             const isFinalPhase = stageIndex >= crop.stages.length - 1;
             if (dead) {
-                showMissionComplete('FAILED', crop, statusLabel);
+                showMissionComplete('FAILED', crop, statusLabel, stage);
                 return;
             }
             if (isFinalPhase) {
-                showMissionComplete(resultStatus.toUpperCase(), crop, statusLabel);
+                showMissionComplete(resultStatus.toUpperCase(), crop, statusLabel, stage);
                 return;
             }
 
@@ -4521,6 +4666,7 @@
             updateStartPhaseButton();
             updateAIMessage();
             updateDisplays();
+            renderPhaseTimeline();
         }
 
         function updateDisplays() {
@@ -4530,21 +4676,6 @@
 
             // Mission day counter
             document.getElementById('day-counter').textContent = String(gameState.missionDay).padStart(3, '0');
-
-            // Phase indicator (e.g. "2/6")
-            const phaseEl = document.getElementById('phase-display');
-            if (phaseEl) {
-                const totalPhases = crop.stages.length;
-                const currentPhaseNum = Math.min(gameState.plant.currentStage + 1, totalPhases);
-                phaseEl.textContent = `${currentPhaseNum}/${totalPhases}`;
-            }
-
-            // Header subtitle reflects current phase name
-            const subEl = document.getElementById('game-subtitle');
-            if (subEl) {
-                const stageName = crop.stages[gameState.plant.currentStage]?.name || crop.name;
-                subEl.textContent = `Phase: ${stageName.toUpperCase()}`;
-            }
 
             // Health meter
             const healthPercent = gameState.plant.health;
@@ -4604,6 +4735,7 @@
             const yieldPercent = Math.min(100, Math.round((gameState.plant.accumulated / crop.harvestDays) * 100));
             document.getElementById('yield-progress').textContent = `${yieldPercent}%`;
 
+            renderPhaseTimeline();
         }
 
         function lockControls() {
@@ -4614,12 +4746,13 @@
         }
 
         // Unified end-of-mission screen (replaces harvest modal + plantDied)
-        function showMissionComplete(outcomeKey, crop, statusLabel) {
+        function showMissionComplete(outcomeKey, crop, statusLabel, stage) {
             const palette = {
                 EXCELLENT: { color: '#4ade80', title: 'MISSION SUCCESS', summary: 'Outstanding work, Colonist. Your crop thrived through every phase.' },
                 GOOD:      { color: '#a3e635', title: 'MISSION SUCCESS', summary: 'A productive harvest. The colony eats well this cycle.' },
                 POOR:      { color: '#fb923c', title: 'MARGINAL HARVEST', summary: 'The crop survived, but yield is below target. Review your phase decisions.' },
-                FAILED:    { color: '#ef4444', title: 'CROP FAILURE',   summary: 'The plant did not survive. The colony will need to ration supplies — try again with a new crop.' },
+                FAILED:    { color: '#ef4444', title: 'CROP FAILURE',   summary: null },
+                // summary is null — built dynamically below for FAILED
             };
             const p = palette[outcomeKey] || palette.GOOD;
 
@@ -4634,7 +4767,35 @@
             badgeEl.style.color = p.color;
             badgeEl.style.borderColor = p.color;
             cropEl.textContent  = crop.name;
-            summaryEl.textContent = p.summary;
+
+            // For FAILED outcomes, build a specific consequence message
+            if (outcomeKey === 'FAILED' && stage) {
+                const stageGuidance = (cropGuidanceData[gameState.currentCrop] || {})[getStageKey(stage.name)];
+                const cropWarning   = stageGuidance && stageGuidance.cropWarning
+                    ? stageGuidance.cropWarning
+                    : 'Conditions exceeded the crop\'s tolerance range.';
+
+                summaryEl.textContent =
+                    `Critical failure during ${stage.name}. On a real lunar mission, this crop loss ` +
+                    `would affect the colony's food supply for the remainder of the growing cycle. ` +
+                    cropWarning;
+            } else if (p.summary) {
+                summaryEl.textContent = p.summary;
+            }
+
+            // Space relevance paragraph (from cropGuidanceData.intro)
+            const relevanceEl = document.getElementById('mission-complete-relevance');
+            if (relevanceEl) {
+                const spaceText = cropGuidanceData[gameState.currentCrop]
+                    && cropGuidanceData[gameState.currentCrop].intro
+                    && cropGuidanceData[gameState.currentCrop].intro.spaceRelevance;
+                if (spaceText) {
+                    relevanceEl.textContent = spaceText;
+                    relevanceEl.style.display = '';
+                } else {
+                    relevanceEl.style.display = 'none';
+                }
+            }
 
             document.getElementById('mission-complete-modal').classList.remove('hidden');
             lockControls();
@@ -4663,6 +4824,7 @@
                 effectiveScaleEnd: 1
             };
             gameState.phaseAnimating = false;
+            gameState.phaseHistory = [];
 
             const _initCrop = cropData[cropType];
             gameState.plant.effectiveScaleStart = _initCrop.stages[0].scaleStart;
@@ -4710,6 +4872,7 @@
                 `Welcome, Colonist! ${crop.name} has been loaded. Open the mission briefing (Agri-Bot [?] button) to see what each phase needs, set your Phase 1 conditions, then press START.`;
             document.getElementById('ai-message').className = 'text-green-300 text-lg leading-relaxed';
             renderStatusBars(null);
+            renderPhaseTimeline();
 
             // Kick off the interface tour if it hasn't run this session
             if (window.LG_Tutorial) LG_Tutorial.maybeStartTour();
@@ -4719,6 +4882,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('day-counter').textContent = '000';
             renderStatusBars(null);
+            renderPhaseTimeline();
             showCropSelection();
         });
 
