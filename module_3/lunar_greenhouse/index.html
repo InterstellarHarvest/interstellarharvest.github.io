@@ -4886,21 +4886,9 @@
             showCropSelection();
         });
 
-        function requestGameFullscreen() {
-            if (document.fullscreenElement) return;
-            const el = document.documentElement;
-            const req = el.requestFullscreen || el.webkitRequestFullscreen;
-            if (req) {
-                Promise.resolve(req.call(el)).catch(() => {});
-            }
-        }
-
         function showVeggieInfo(cropType) {
             const veggieInfo = veggieInfoData[cropType];
             if (!veggieInfo) return;
-
-            // Veggie selection doubles as the user gesture to enter fullscreen
-            requestGameFullscreen();
 
             // Populate modal
             document.getElementById('veggie-info-icon').src = veggieInfo.icon;
